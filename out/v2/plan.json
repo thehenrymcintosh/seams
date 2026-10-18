@@ -198,7 +198,9 @@
                     "active"
                   ]
                 }
-              ]
+              ],
+              "columns": [],
+              "gsis": []
             }
           ]
         }
@@ -622,7 +624,8 @@
                   "field": "total",
                   "type": "numeric(12,2)"
                 }
-              ]
+              ],
+              "gsis": []
             },
             {
               "entity": "OrderLine",
@@ -633,7 +636,9 @@
                     "orderId"
                   ]
                 }
-              ]
+              ],
+              "columns": [],
+              "gsis": []
             }
           ]
         }
@@ -987,7 +992,9 @@
                   "pk": "ORDER#{orderId}",
                   "sk": "AT#{createdAt}"
                 }
-              ]
+              ],
+              "columns": [],
+              "indexes": []
             }
           ],
           "note": "Single-table design: one item per payment, found by order through the byOrder index."

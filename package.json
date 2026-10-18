@@ -2,11 +2,16 @@
   "name": "seams",
   "private": true,
   "type": "module",
-  "bin": { "seams": "src/cli.ts" },
-  "engines": { "node": ">=22.18" },
+  "bin": {
+    "seams": "src/cli.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "render": "node run.ts",
-    "typecheck": "tsc -p tsconfig.json && tsc -p out/v2/skeleton/tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json && tsc -p out/v2/skeleton/tsconfig.json",
+    "test": "node --test test/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

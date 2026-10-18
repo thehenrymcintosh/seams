@@ -64,7 +64,7 @@ export function skeleton(plan: Plan): Files {
     if (m.endpoints.length) files.set(`${dir}/routes.ts`, routesFile(m, ix.contractOwner));
     if (m.ports?.length) files.set(`${dir}/ports.ts`, portsFile(m));
     if (m.signals?.length) files.set(`${dir}/telemetry.ts`, telemetryFile(m));
-    const planned = (m.tests ?? []).filter((x) => !x.exists);
+    const planned = m.tests.filter((x) => !x.exists);
     if (planned.length) files.set(`${dir}/${m.name.toLowerCase()}.test.ts`, testsFile(m, planned));
   }
   return files;
@@ -87,7 +87,7 @@ function sqlFile(m: Module, st: Store): string {
       return `  "${o?.column ?? f.name}" ${o?.type ?? d.type}${nullable ? "" : " NOT NULL"}${o?.default ? ` DEFAULT ${o.default}` : ""}`;
     });
     cols.push(`  PRIMARY KEY (${e.key.map((k) => `"${k}"`).join(", ")})`);
-    const idx = (b.indexes ?? []).map((i) =>
+    const idx = b.indexes.map((i) =>
       `CREATE ${i.unique ? "UNIQUE " : ""}INDEX "${indexName(b, i)}" ON "${b.table}"${i.using ? ` USING ${i.using}` : ""} (${i.on.map((c) => `"${c}"`).join(", ")})${i.where ? ` WHERE ${i.where}` : ""};`);
     return [`CREATE TABLE "${b.table}" (\n${cols.join(",\n")}\n);`, ...idx].join("\n");
   });
@@ -109,7 +109,7 @@ function keysFile(m: Module, st: Store): string {
     out.push(`  table: ${JSON.stringify(b.table)},`);
     if (b.pk) out.push(`  pk: ${fn(b.pk)},`);
     if (b.sk) out.push(`  sk: ${fn(b.sk)},`);
-    for (const g of b.gsis ?? []) {
+    for (const g of b.gsis) {
       out.push(`  ${g.name}: { index: ${JSON.stringify(g.name)}, pk: ${fn(g.pk)}${g.sk ? `, sk: ${fn(g.sk)}` : ""} },`);
     }
     if (b.ttl) out.push(`  ttl: ${JSON.stringify(b.ttl)},`);
@@ -299,7 +299,7 @@ function indexFile(m: Module, parent: Scope): string {
   const depLines: string[] = [];
   for (const u of m.uses) { s.needed.add(u.contract); depLines.push(`  ${lowerFirst(u.contract)}: ${u.contract}.${u.contract}Api;`); }
   for (const r of m.repositories) depLines.push(`  ${lowerFirst(r.name)}: ${r.name};`);
-  const ports = (m.ports ?? []).filter((p) => p.injected);
+  const ports = m.ports.filter((p) => p.injected);
   for (const p of ports) depLines.push(`  ${lowerFirst(p.name)}: ${p.name};`);
   if (m.signals?.length) depLines.push("  emit: Emit;");
   for (const c of m.provides) {

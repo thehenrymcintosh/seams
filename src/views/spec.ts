@@ -4,7 +4,8 @@
 import type { Field, Plan, RepoMethod } from "../ast.ts";
 import { check, dependencyGraph } from "../check.ts";
 import { walk } from "../walk.ts";
-import { erDiagram, systemDiagram, typeLabel } from "./mermaid.ts";
+import { erDiagram, systemDiagram } from "./mermaid.ts";
+import { typeLabel } from "../types.ts";
 
 export function spec(plan: Plan): string {
   const out: string[] = [];

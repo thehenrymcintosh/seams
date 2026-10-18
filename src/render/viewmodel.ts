@@ -182,19 +182,19 @@ function treeView(plan: Plan): TreeView {
           return { label: c, ref: o ? ids.operation(o, cn, op) : undefined };
         }),
       })),
-      ports: (m.ports ?? []).map((pt) => ({
+      ports: m.ports.map((pt) => ({
         id: ids.port(path, pt.name), name: pt.name, purpose: pt.purpose, methods: pt.methods, injected: pt.injected,
         adapters: pt.adapters, note: pt.note, sources: sources(pt.sources),
       })),
-      signals: (m.signals ?? []).map((sg) => ({
+      signals: m.signals.map((sg) => ({
         id: ids.signal(path, sg.name), name: sg.name, type: sg.type, on: link(sg.on), fields: sg.fields, alert: sg.alert,
         note: sg.note, sources: sources(sg.sources),
       })),
-      tests: (m.tests ?? []).map((tc) => ({
+      tests: m.tests.map((tc) => ({
         id: ids.test(path, tc.name), name: tc.name, level: tc.level, covers: tc.covers.map(link), fakes: tc.fakes.map(link),
         exists: !!tc.exists, note: tc.note, sources: sources(tc.sources),
       })),
-      gaps: (m.gaps ?? []).map((g) => {
+      gaps: m.gaps.map((g) => {
         const t = placed.find((p) => p.module.name === g.module);
         return { module: g.module, ref: t ? ids.module(t.path) : undefined, note: g.note };
       }),
@@ -331,9 +331,9 @@ function storeViews(m: Module, path: string): StoreView[] {
           const d = sqlType(f.type, enums);
           return { name: o?.column ?? f.name, type: o?.type ?? d.type, nullable: o?.nullable ?? d.nullable, key: e.key.includes(f.name) };
         }) : [],
-        indexes: (b.indexes ?? []).map((i) => ({ name: indexName(b, i), on: i.on, unique: !!i.unique, using: i.using, serves: served(indexName(b, i)) })),
+        indexes: b.indexes.map((i) => ({ name: indexName(b, i), on: i.on, unique: !!i.unique, using: i.using, serves: served(indexName(b, i)) })),
         pk: b.pk, sk: b.sk, ttl: b.ttl,
-        gsis: (b.gsis ?? []).map((g) => ({ ...g, serves: served(g.name) })),
+        gsis: b.gsis.map((g) => ({ ...g, serves: served(g.name) })),
         keyServes: [...served("primary key"), ...served("table key")],
         scans: mine.filter((a) => !a.servedBy).map(label),
       };

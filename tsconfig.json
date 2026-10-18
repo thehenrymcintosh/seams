@@ -11,5 +11,5 @@
     "noUnusedLocals": true,
     "types": ["node"]
   },
-  "include": ["src", "examples", "run.ts", "plans"]
+  "include": ["src", "examples", "run.ts", "plans", "test"]
 }

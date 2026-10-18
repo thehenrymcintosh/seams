@@ -9,13 +9,15 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PlanDocument } from "../doc.ts";
+import { normalizeDocument } from "../normalize.ts";
 import { outline } from "../views/outline.ts";
 import { viewOf } from "./viewmodel.ts";
 
 const here = import.meta.dirname;
 const asset = (name: string) => readFileSync(join(here, name), "utf8");
 
-export function renderDocument(doc: PlanDocument): string {
+export function renderDocument(input: PlanDocument): string {
+  const doc = normalizeDocument(input);
   const view = viewOf(doc);
   return `<!doctype html>
 <html lang="en" data-lavish-annotate="off">

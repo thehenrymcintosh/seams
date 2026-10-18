@@ -492,3 +492,4 @@ details.ctx.asks .count { color: var(--ask); border-color: var(--ask); }
 .gap-label { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); margin-right: 5px; }
 .gap .linklike { font-weight: 600; color: var(--text); }
 .gap-note { display: block; }
+.badge.hub { color: var(--k-contract); border-color: color-mix(in srgb, var(--k-contract) 40%, transparent); }

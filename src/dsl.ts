@@ -156,6 +156,7 @@ export const stub = (
   ports: [],
   signals: [],
   tests: [],
+  gaps: [],
   modules: [],
 });
 
@@ -164,8 +165,8 @@ export const stub = (
 export const store = (name: string, engine: Engine, holds: Binding[], o: { sources?: SourceRef[]; note?: string } = {}): Store =>
   ({ kind: "store", name, engine, holds, ...o });
 
-export const table = (entityName: string, tableName: string, o: Omit<Binding, "entity" | "table"> = {}): Binding =>
-  ({ entity: entityName, table: tableName, ...o });
+export const table = (entityName: string, tableName: string, o: Partial<Omit<Binding, "entity" | "table">> = {}): Binding =>
+  ({ entity: entityName, table: tableName, ...o, columns: o.columns ?? [], indexes: o.indexes ?? [], gsis: o.gsis ?? [] });
 
 export const idx = (...on: string[]): PhysicalIndex => ({ on });
 export const uniqueIdx = (...on: string[]): PhysicalIndex => ({ on, unique: true });

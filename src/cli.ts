@@ -18,6 +18,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { check, type Diagnostic } from "./check.ts";
 import type { PlanDocument } from "./doc.ts";
+import { normalizeDocument } from "./normalize.ts";
 import { readDocument, renderDocument } from "./render/render.ts";
 import { verify } from "./verify.ts";
 import { outline } from "./views/outline.ts";
@@ -25,9 +26,9 @@ import { outline } from "./views/outline.ts";
 const [cmd, file, ...rest] = process.argv.slice(2);
 
 async function load(path: string): Promise<PlanDocument> {
-  if (path.endsWith(".ts")) return (await import(pathToFileURL(resolve(path)).href)).default as PlanDocument;
+  if (path.endsWith(".ts")) return normalizeDocument((await import(pathToFileURL(resolve(path)).href)).default as PlanDocument);
   const text = readFileSync(path, "utf8");
-  return path.endsWith(".html") ? readDocument(text) : (JSON.parse(text) as PlanDocument);
+  return normalizeDocument(path.endsWith(".html") ? readDocument(text) : (JSON.parse(text) as PlanDocument));
 }
 
 function diagnostics(doc: PlanDocument): Diagnostic[] {

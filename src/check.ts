@@ -171,14 +171,14 @@ export function check(plan: Plan): Diagnostic[] {
         if (bound.has(b.entity)) err(at, `${b.entity} is bound to more than one table`);
         bound.add(b.entity);
         const fields = new Set(e.fields.map((f) => f.name));
-        const colToField = new Map((b.columns ?? []).map((c) => [c.column ?? c.field, c.field]));
-        for (const c of b.columns ?? []) if (!fields.has(c.field)) err(at, `column for unknown field "${c.field}"`);
-        for (const i of b.indexes ?? []) {
+        const colToField = new Map(b.columns.map((c) => [c.column ?? c.field, c.field]));
+        for (const c of b.columns) if (!fields.has(c.field)) err(at, `column for unknown field "${c.field}"`);
+        for (const i of b.indexes) {
           for (const on of i.on) if (!fields.has(colToField.get(on) ?? on)) err(at, `index on unknown column "${on}"`);
         }
         if (RELATIONAL.has(st.engine)) continue;
         if (st.engine === "dynamodb" && !b.pk) { err(at, "a DynamoDB binding needs a partition key template (pk)"); continue; }
-        for (const tpl of [b.pk, b.sk, ...(b.gsis ?? []).flatMap((g) => [g.pk, g.sk])]) {
+        for (const tpl of [b.pk, b.sk, ...b.gsis.flatMap((g) => [g.pk, g.sk])]) {
           for (const f of tpl ? templateFields(tpl) : []) if (!fields.has(f)) err(at, `key template "${tpl}" names unknown field "${f}"`);
         }
         if (b.pk && st.engine === "dynamodb") {
@@ -205,13 +205,13 @@ export function check(plan: Plan): Diagnostic[] {
     }
 
     // --- 4. wiring: ports are injected, and fakes have something to fake with
-    const ports = m.ports ?? [];
+    const ports = m.ports;
     dupes(ports.map((p) => p.name), (n) => err(`${m.name} / port ${n}`, "duplicate port"));
     for (const p of ports) {
       const at = `${m.name} / port ${p.name}`;
       if (usedContracts.has(p.name)) err(at, `is also a contract this module uses; a port is for things outside the domain`);
       if (!p.adapters.some((a) => a.env === "prod")) warn(at, "has no production adapter");
-      const faked = (m.tests ?? []).filter((tc) => tc.fakes.includes(p.name)).length;
+      const faked = m.tests.filter((tc) => tc.fakes.includes(p.name)).length;
       const fake = p.adapters.some((a) => a.env === "test");
       const n = `${faked} test${faked === 1 ? "" : "s"}`;
       if (!p.injected && faked) warn(at, `${n} fake it, but the code imports it directly and has no test adapter; inject it and add a fake`);
@@ -219,7 +219,7 @@ export function check(plan: Plan): Diagnostic[] {
       else if (faked && !fake) warn(at, `${n} fake it, but it has no test adapter yet`);
     }
 
-    for (const g of m.gaps ?? []) {
+    for (const g of m.gaps) {
       const at = `${m.name} / gap ${g.module}`;
       const target = ix.moduleByName.get(g.module);
       if (!target || target === m) err(at, `no other module named ${g.module}`);
@@ -233,8 +233,8 @@ export function check(plan: Plan): Diagnostic[] {
       ...[...m.provides, ...m.uses.map((u) => ix.contractByName.get(u.contract)).filter((c) => !!c)]
         .flatMap((c) => [...c.operations, ...c.events].map((x) => `${c.name}.${x.name}`)),
     ]);
-    dupes((m.signals ?? []).map((x) => x.name), (n) => err(`${m.name} / signal ${n}`, "duplicate signal"));
-    for (const sg of m.signals ?? []) {
+    dupes(m.signals.map((x) => x.name), (n) => err(`${m.name} / signal ${n}`, "duplicate signal"));
+    for (const sg of m.signals) {
       const at = `${m.name} / ${sg.type} ${sg.name}`;
       if (!emitters.has(sg.on)) err(at, `"${sg.on}" is not an operation, event, endpoint or port this module has`);
       for (const f of sg.fields) {
@@ -249,7 +249,7 @@ export function check(plan: Plan): Diagnostic[] {
     // --- 6. testing: tests name real things, and fakes are ports or used contracts
     const coverable = new Set<string>([...emitters, ...m.aggregates.map((a) => a.name)]);
     const fakeable = new Set([...ports.map((p) => p.name), ...m.uses.map((u) => u.contract)]);
-    for (const tc of m.tests ?? []) {
+    for (const tc of m.tests) {
       const at = `${m.name} / test "${tc.name}"`;
       for (const c of tc.covers) if (!coverable.has(c)) err(at, `covers "${c}", which this module doesn't have`);
       for (const f of tc.fakes) if (!fakeable.has(f)) err(at, `fakes "${f}", which is not a port or a contract this module uses`);

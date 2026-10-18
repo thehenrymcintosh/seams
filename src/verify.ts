@@ -13,7 +13,7 @@
 // proposed tree after building (the change is done and nothing drifted).
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { join, posix } from "node:path";
 import type { Located, Module, Plan } from "./ast.ts";
 import { indexPlan } from "./check.ts";
 import { walk } from "./walk.ts";
@@ -26,11 +26,11 @@ const CODE = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
 // `baseline` is the tree the change starts from. Operations and endpoints that
 // are new against it must point at their code with src(); a name match is
 // not enough to say a new thing was built.
-export function verify(plan: Plan, root: string, baseline?: Plan): Finding[] {
+export function verify(plan: Plan, root: string | Files, baseline?: Plan): Finding[] {
   const out: Finding[] = [];
   const err = (at: string, message: string) => out.push({ level: "error", at, message });
   const warn = (at: string, message: string) => out.push({ level: "warning", at, message });
-  const repo = new Repo(root);
+  const repo = new Repo(typeof root === "string" ? diskFiles(root) : root);
   const tree = walk(plan);
   const ix = indexPlan(plan);
   const before = baseline && walk(baseline);
@@ -51,9 +51,9 @@ export function verify(plan: Plan, root: string, baseline?: Plan): Finding[] {
       for (const b of st.holds) located.push([`${path} / table ${b.table}`, b]);
     }
     for (const x of m.endpoints) located.push([`${path} / endpoint ${x.name}`, x]);
-    for (const x of m.ports ?? []) located.push([`${path} / port ${x.name}`, x]);
-    for (const x of m.signals ?? []) located.push([`${path} / ${x.type} ${x.name}`, x]);
-    for (const x of m.tests ?? []) {
+    for (const x of m.ports) located.push([`${path} / port ${x.name}`, x]);
+    for (const x of m.signals) located.push([`${path} / ${x.type} ${x.name}`, x]);
+    for (const x of m.tests) {
       located.push([`${path} / test "${x.name}"`, x]);
       if (x.exists && !x.sources?.length) warn(`${path} / test "${x.name}"`, "marked as existing but has no src() pointing at it");
     }
@@ -94,7 +94,7 @@ export function verify(plan: Plan, root: string, baseline?: Plan): Finding[] {
         if (!usedInCode.has(o.module)) usedInCode.set(o.module, new Set());
         usedInCode.get(o.module)!.add(t.module);
         if (allowed(o.module, t.module, tree, ix)) continue;
-        const gap = (o.module.gaps ?? []).find((g) => g.module === t.module.name);
+        const gap = o.module.gaps.find((g) => g.module === t.module.name);
         if (gap) { gapsSeen.add(gap); continue; }
         const key = `${o.path} -> ${t.path}`;
         const prev = seen.get(key);
@@ -107,7 +107,7 @@ export function verify(plan: Plan, root: string, baseline?: Plan): Finding[] {
     err(`${from} / uses`, `the code imports ${to} (${count} import${count === 1 ? "" : "s"}, e.g. ${example}) but the plan declares no dependency on it. Add the dependency, or a gap() if the plan leaves it out on purpose`);
   }
   for (const { module: m, path } of tree) {
-    for (const g of m.gaps ?? []) {
+    for (const g of m.gaps) {
       if (!ix.moduleByName.has(g.module)) err(`${path} / gap ${g.module}`, `no module named ${g.module}`);
       else if (!gapsSeen.has(g)) warn(`${path} / gap ${g.module}`, `the code no longer imports ${g.module}; remove the gap`);
     }
@@ -148,7 +148,7 @@ export function verify(plan: Plan, root: string, baseline?: Plan): Finding[] {
             const col = b.columns?.find((c) => c.field === f.name)?.column ?? f.name;
             if (!model.fields.has(col)) err(at, `column ${col} is not in model ${b.table}`);
           }
-          for (const i of b.indexes ?? []) {
+          for (const i of b.indexes) {
             const key = i.on.join(",");
             if (!model.indexes.has(key)) err(at, `no index on (${i.on.join(", ")}) in model ${b.table}`);
           }
@@ -188,6 +188,42 @@ function allowed(from: Module, to: Module, tree: ReturnType<typeof walk>, ix: Re
 }
 
 const trim = (p: string) => p.replace(/\/+$/, "");
+
+// The text with comments and template literals replaced by spaces, keeping
+// line breaks so line numbers still match. Plain strings stay: that is where
+// import specifiers live. A string never runs past the end of its line, so a
+// quote inside a regex literal can't swallow the rest of the file.
+export function codeOnly(text: string): string {
+  let out = "";
+  let mode: "code" | "line" | "block" | "str" | "tpl" = "code";
+  let quote = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], next = text[i + 1];
+    const blank = c === "\n" ? "\n" : " ";
+    if (mode === "code") {
+      if (c === "/" && next === "/") { mode = "line"; out += "  "; i++; continue; }
+      if (c === "/" && next === "*") { mode = "block"; out += "  "; i++; continue; }
+      if (c === "`") { mode = "tpl"; out += " "; continue; }
+      if (c === "'" || c === '"') { mode = "str"; quote = c; }
+      out += c;
+    } else if (mode === "line") {
+      if (c === "\n") mode = "code";
+      out += blank;
+    } else if (mode === "block") {
+      if (c === "*" && next === "/") { mode = "code"; out += "  "; i++; continue; }
+      out += blank;
+    } else if (mode === "tpl") {
+      if (c === "\\") { out += next === "\n" ? " \n" : "  "; i++; continue; }
+      if (c === "`") mode = "code";
+      out += blank;
+    } else {
+      if (c === "\\" && next !== "\n") { out += c + next; i++; continue; }
+      if (c === quote || c === "\n") mode = "code";
+      out += c;
+    }
+  }
+  return out;
+}
 // A symbol as a whole word. Symbols can start or end with punctuation
 // (a quoted command name), where \b would never match.
 const wordRe = (s: string) => {
@@ -195,25 +231,56 @@ const wordRe = (s: string) => {
   return new RegExp(`${/^\w/.test(s) ? "(?<![\\w$])" : ""}${body}${/\w$/.test(s) ? "(?![\\w$])" : ""}`);
 };
 
+// The repository, as paths relative to its root. Verify reads it only through
+// this, so a test can hand it an in-memory folder.
+export type Files = {
+  exists(p: string): boolean;
+  isDir(p: string): boolean;
+  list(dir: string): string[];          // entry names in a folder
+  read(file: string): string;
+};
+
+export function diskFiles(root: string): Files {
+  const abs = (p: string) => join(root, p);
+  return {
+    exists: (p) => existsSync(abs(p)),
+    isDir: (p) => existsSync(abs(p)) && statSync(abs(p)).isDirectory(),
+    list: (d) => readdirSync(abs(d)),
+    read: (f) => readFileSync(abs(f), "utf8"),
+  };
+}
+
+// { "src/a.ts": "...", "prisma/schema.prisma": "..." } as a folder.
+export function memoryFiles(files: Record<string, string>): Files {
+  const paths = Object.keys(files);
+  const isDir = (p: string) => p === "" || paths.some((f) => f.startsWith(`${trim(p)}/`));
+  return {
+    exists: (p) => p in files || isDir(p),
+    isDir,
+    list: (d) => [...new Set(paths.filter((f) => d === "" || f.startsWith(`${trim(d)}/`))
+      .map((f) => (d === "" ? f : f.slice(trim(d).length + 1)).split("/")[0]))],
+    read: (f) => files[f] ?? "",
+  };
+}
+
 // The repository, read lazily and cached: file lists, contents, packages.
 class Repo {
-  root: string;
+  fs: Files;
   private text = new Map<string, string[]>();
   private lists = new Map<string, string[]>();
   private packages: Map<string, string> | null = null;
-  constructor(root: string) { this.root = resolve(root); }
+  constructor(fs: Files) { this.fs = fs; }
 
-  exists(p: string) { return existsSync(join(this.root, p)); }
-  isDir(p: string) { return this.exists(p) && statSync(join(this.root, p)).isDirectory(); }
+  exists(p: string) { return this.fs.exists(p); }
+  isDir(p: string) { return this.fs.isDir(p); }
 
   files(p: string): string[] {
     const key = trim(p);
     if (this.lists.has(key)) return this.lists.get(key)!;
     const out: string[] = [];
     const visit = (rel: string) => {
-      const abs = join(this.root, rel);
-      if (!statSync(abs).isDirectory()) { out.push(rel); return; }
-      for (const n of readdirSync(abs)) if (!SKIP.has(n)) visit(rel ? `${rel}/${n}` : n);
+      if (!this.fs.isDir(rel)) { out.push(rel); return; }
+      for (const n of this.fs.list(rel)) if (!SKIP.has(n)) visit(rel ? `${rel}/${n}` : n);
     };
     if (this.exists(key)) visit(key);
     this.lists.set(key, out);
@@ -223,7 +290,7 @@ class Repo {
   lines(file: string): string[] {
     if (!this.text.has(file)) {
       let t = "";
-      try { t = readFileSync(join(this.root, file), "utf8"); } catch { /* unreadable */ }
+      try { t = this.fs.read(file); } catch { /* unreadable */ }
       this.text.set(file, t.split("\n"));
     }
     return this.text.get(file)!;
@@ -243,22 +310,27 @@ class Repo {
     return this.files(p).some((f) => re.test(f)) || this.find(p, re).length > 0;
   }
 
+  // Import specifiers, read from the code with comments and template
+  // literals blanked out, so an import written inside a string or a comment
+  // (a code generator's output, an example) is not mistaken for a real one.
   imports(file: string): { spec: string; line: number }[] {
     const out: { spec: string; line: number }[] = [];
     const re = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["']([^"']+)["']/g;
-    this.lines(file).forEach((l, i) => { for (const m of l.matchAll(re)) out.push({ spec: m[1], line: i + 1 }); });
+    codeOnly(this.lines(file).join("\n")).split("\n").forEach((l, i) => {
+      for (const m of l.matchAll(re)) out.push({ spec: m[1], line: i + 1 });
+    });
     return out;
   }
 
   // A specifier as a repository path: relative, or into a workspace package.
   resolveImport(from: string, spec: string): string | null {
     let base: string | null = null;
-    if (spec.startsWith(".")) base = relative(this.root, resolve(this.root, dirname(from), spec));
+    if (spec.startsWith(".")) base = posix.normalize(posix.join(posix.dirname(from), spec));
     else {
       const pkgs = this.workspacePackages();
       const name = [...pkgs.keys()].filter((n) => spec === n || spec.startsWith(`${n}/`)).sort((a, b) => b.length - a.length)[0];
       if (!name) return null;
-      base = join(pkgs.get(name)!, spec.slice(name.length));
+      base = posix.join(pkgs.get(name)!, spec.slice(name.length));
     }
     for (const cand of [base, ...["ts", "tsx", "js", "jsx", "mjs"].flatMap((e) => [`${base}.${e}`, `${base}/index.${e}`])]) {
       if (this.exists(cand) && !this.isDir(cand)) return cand;
@@ -270,17 +342,17 @@ class Repo {
     if (this.packages) return this.packages;
     this.packages = new Map();
     const visit = (rel: string, depth: number) => {
-      const abs = join(this.root, rel);
-      if (existsSync(join(abs, "package.json"))) {
+      const manifest = rel ? `${rel}/package.json` : "package.json";
+      if (rel && this.fs.exists(manifest)) {
         try {
-          const name = JSON.parse(readFileSync(join(abs, "package.json"), "utf8")).name;
-          if (name && rel) this.packages!.set(name, rel);
+          const name = JSON.parse(this.fs.read(manifest)).name;
+          if (name) this.packages!.set(name, rel);
         } catch { /* not json */ }
       }
       if (depth >= 3) return;
-      for (const n of readdirSync(abs)) {
-        if (SKIP.has(n) || n.startsWith(".")) continue;
-        if (statSync(join(abs, n)).isDirectory()) visit(rel ? `${rel}/${n}` : n, depth + 1);
+      for (const n of this.fs.list(rel)) {
+        const child = rel ? `${rel}/${n}` : n;
+        if (!SKIP.has(n) && !n.startsWith(".") && this.fs.isDir(child)) visit(child, depth + 1);
       }
     };
     visit("", 0);

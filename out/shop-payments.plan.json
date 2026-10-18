@@ -389,7 +389,8 @@
                     "field": "total",
                     "type": "numeric(12,2)"
                   }
-                ]
+                ],
+                "gsis": []
               },
               {
                 "entity": "OrderLine",
@@ -400,7 +401,9 @@
                       "orderId"
                     ]
                   }
-                ]
+                ],
+                "columns": [],
+                "gsis": []
               }
             ]
           }
@@ -657,7 +660,9 @@
                       "active"
                     ]
                   }
-                ]
+                ],
+                "columns": [],
+                "gsis": []
               }
             ]
           }
@@ -697,6 +702,7 @@
         "ports": [],
         "signals": [],
         "tests": [],
+        "gaps": [],
         "modules": []
       },
       {
@@ -726,6 +732,7 @@
         "ports": [],
         "signals": [],
         "tests": [],
+        "gaps": [],
         "modules": []
       }
     ]
@@ -1150,7 +1157,8 @@
                     "field": "total",
                     "type": "numeric(12,2)"
                   }
-                ]
+                ],
+                "gsis": []
               },
               {
                 "entity": "OrderLine",
@@ -1161,7 +1169,9 @@
                       "orderId"
                     ]
                   }
-                ]
+                ],
+                "columns": [],
+                "gsis": []
               }
             ]
           }
@@ -1495,7 +1505,9 @@
                       "active"
                     ]
                   }
-                ]
+                ],
+                "columns": [],
+                "gsis": []
               }
             ]
           }
@@ -1723,7 +1735,9 @@
                     "pk": "ORDER#{orderId}",
                     "sk": "AT#{createdAt}"
                   }
-                ]
+                ],
+                "columns": [],
+                "indexes": []
               }
             ],
             "note": "Single-table design: one item per payment, found by order through the byOrder index."
@@ -1908,6 +1922,7 @@
         "ports": [],
         "signals": [],
         "tests": [],
+        "gaps": [],
         "modules": []
       },
       {
@@ -1937,6 +1952,7 @@
         "ports": [],
         "signals": [],
         "tests": [],
+        "gaps": [],
         "modules": []
       }
     ]

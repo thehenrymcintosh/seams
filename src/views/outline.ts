@@ -15,6 +15,7 @@
 import type { Contract, Field, Module, Plan, TypeExpr } from "../ast.ts";
 import type { PlanDocument } from "../doc.ts";
 import { ids } from "../ids.ts";
+import { typeLabel } from "../types.ts";
 import { accessPatterns } from "../storage.ts";
 import { diff } from "./diff.ts";
 
@@ -82,7 +83,7 @@ function planLines(plan: Plan): string[] {
     if (m.note) out.push(`${p}note: ${m.note}`);
     const uses = m.uses.map((u) => u.contract + (u.subscribes.length ? ` (on ${u.subscribes.join(", ")})` : ""));
     out.push(`${p}uses: ${uses.length ? uses.join("; ") : "nothing"}`);
-    for (const g of m.gaps ?? []) out.push(`${p}gap: the code also reaches ${g.module} — ${g.note}`);
+    for (const g of m.gaps) out.push(`${p}gap: the code also reaches ${g.module} — ${g.note}`);
     for (const a of m.aggregates) {
       out.push(`${p}aggregate [${ids.aggregate(path, a.name)}] root ${a.root}${a.members.length ? ` + ${a.members.join(", ")}` : ""}`);
       for (const i of a.invariants) out.push(`${p}  invariant: ${i}`);
@@ -97,9 +98,9 @@ function planLines(plan: Plan): string[] {
     for (const st of m.stores) {
       out.push(`${p}store [${ids.store(path, st.name)}] ${st.engine}`);
       for (const b of st.holds) {
-        const key = b.pk ? ` pk "${b.pk}"${b.sk ? ` sk "${b.sk}"` : ""}${(b.gsis ?? []).map((g) => ` ${g.name}(pk "${g.pk}"${g.sk ? ` sk "${g.sk}"` : ""})`).join("")}` : "";
-        const idx = (b.indexes ?? []).map((i) => `${i.unique ? "unique " : ""}${i.using ? `${i.using} ` : ""}(${i.on.join("+")})`);
-        const cols = (b.columns ?? []).filter((c) => c.type || c.column).map((c) => `${c.column ?? c.field} ${c.type ?? ""}`.trim());
+        const key = b.pk ? ` pk "${b.pk}"${b.sk ? ` sk "${b.sk}"` : ""}${b.gsis.map((g) => ` ${g.name}(pk "${g.pk}"${g.sk ? ` sk "${g.sk}"` : ""})`).join("")}` : "";
+        const idx = b.indexes.map((i) => `${i.unique ? "unique " : ""}${i.using ? `${i.using} ` : ""}(${i.on.join("+")})`);
+        const cols = b.columns.filter((c) => c.type || c.column).map((c) => `${c.column ?? c.field} ${c.type ?? ""}`.trim());
         out.push(`${p}  table [${ids.binding(path, st.name, b.entity)}] "${b.table}" holds ${b.entity}${key}` +
           `${idx.length ? ` index ${idx.join(" ")}` : ""}${cols.length ? ` columns ${cols.join(", ")}` : ""}${b.ttl ? ` ttl ${b.ttl}` : ""}`);
       }
@@ -110,14 +111,14 @@ function planLines(plan: Plan): string[] {
     for (const ep of m.endpoints) {
       out.push(`${p}endpoint [${ids.endpoint(path, ep.name)}] ${ep.protocol}${ep.method ? ` ${ep.method}` : ""} ${ep.path} auth(${ep.audience}, ${ep.auth}) -> ${ep.calls.join(", ")}`);
     }
-    for (const pt of m.ports ?? []) {
+    for (const pt of m.ports) {
       const ad = pt.adapters.map((a) => `${a.env}=${a.name}`).join(" ");
       out.push(`${p}port [${ids.port(path, pt.name)}]${pt.injected ? "" : " [imported directly]"} ${pt.methods.join("; ")}${ad ? ` adapters ${ad}` : ""} — ${pt.purpose}`);
     }
-    for (const sg of m.signals ?? []) {
+    for (const sg of m.signals) {
       out.push(`${p}${sg.type} [${ids.signal(path, sg.name)}] on ${sg.on}${sg.fields.length ? ` { ${sg.fields.join(", ")} }` : ""}${sg.alert ? ` alert "${sg.alert}"` : ""}`);
     }
-    for (const tc of m.tests ?? []) {
+    for (const tc of m.tests) {
       out.push(`${p}test [${ids.test(path, tc.name)}] ${tc.level}${tc.exists ? "" : " (planned)"} covers ${tc.covers.join(", ")}${tc.fakes.length ? ` fakes ${tc.fakes.join(", ")}` : ""}`);
     }
     for (const sub of m.modules) visit(sub, `${path}/${sub.name}`, p);
@@ -141,12 +142,4 @@ function contractLines(m: Module, path: string, c: Contract, p: string): string[
 }
 
 const fields = (fs: Field[]) => fs.map((f) => `${f.name}: ${ts(f.type)}`).join(", ");
-
-function ts(t: TypeExpr): string {
-  switch (t.kind) {
-    case "prim": return t.name;
-    case "ref": return t.name;
-    case "list": return `${ts(t.of)}[]`;
-    case "optional": return `${ts(t.of)} | null`;
-  }
-}
+const ts = (t: TypeExpr) => typeLabel(t, " | null");

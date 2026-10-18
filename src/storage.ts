@@ -64,7 +64,7 @@ function servedPhysically(e: Entity, store: Store, b: Binding, by: string[]): st
   if (RELATIONAL.has(store.engine)) {
     if (covers(e.key, by)) return "primary key";
     const field = (on: string) => b.columns?.find((c) => c.column === on)?.field ?? on;
-    const i = (b.indexes ?? []).find((x) => covers(x.on.map(field), by));
+    const i = b.indexes.find((x) => covers(x.on.map(field), by));
     return i ? indexName(b, i) : null;
   }
   if (b.pk) {
@@ -73,7 +73,7 @@ function servedPhysically(e: Entity, store: Store, b: Binding, by: string[]): st
       return p.every((f) => by.includes(f)) && by.every((f) => p.includes(f) || s.includes(f));
     };
     if (keyed(b.pk, b.sk)) return "table key";
-    const g = (b.gsis ?? []).find((x) => keyed(x.pk, x.sk));
+    const g = b.gsis.find((x) => keyed(x.pk, x.sk));
     return g ? g.name : null;
   }
   return null;

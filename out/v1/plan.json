@@ -198,7 +198,9 @@
                     "active"
                   ]
                 }
-              ]
+              ],
+              "columns": [],
+              "gsis": []
             }
           ]
         }
@@ -588,7 +590,8 @@
                   "field": "total",
                   "type": "numeric(12,2)"
                 }
-              ]
+              ],
+              "gsis": []
             },
             {
               "entity": "OrderLine",
@@ -599,7 +602,9 @@
                     "orderId"
                   ]
                 }
-              ]
+              ],
+              "columns": [],
+              "gsis": []
             }
           ]
         }

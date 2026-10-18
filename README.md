@@ -128,6 +128,8 @@ On top of that, each plan has **phases** (slices that ship on their own), **ques
   signals, tests), then sub-modules.
 - **Test coverage in place:** each operation lists the tests that prove it, or says "no test yet".
 - **Focus:** click something and everything unrelated fades.
+- **Quiet foundations:** a module nearly everything uses (like a shared model) gets a "used by N
+  modules" badge instead of a wire from every card.
 - **Domain words** are underlined in the text. Hover one to see what it means.
 
 ---
@@ -266,6 +268,8 @@ const orders = module("Orders", {
 | `src/cli.ts` | The `seams` command |
 | `examples/` | A small shop, before and after adding payments, plus a broken version |
 | `plans/documenso-delegation.plan.ts` | A real run on [Documenso](https://github.com/documenso/documenso) |
+| `plans/seams.plan.ts` | seams mapped with seams; `seams verify plans/seams.plan.ts` passes on this repo |
+| `test/` | Tests for the checker, diff, verify and render |
 | `docs/app-pitch.md` | Where this is heading |
 
 </details>
@@ -277,6 +281,7 @@ const orders = module("Orders", {
 npm install          # TypeScript, for typechecking only
 node run.ts          # regenerate out/
 npm run typecheck    # the code and the generated skeleton
+npm test             # checker, diff, verify and render, with node:test
 ```
 
 Node runs the `.ts` files directly, so the code avoids `enum`, `namespace` and parameter properties.
@@ -285,7 +290,8 @@ Node runs the `.ts` files directly, so the code avoids `enum`, `namespace` and p
 
 ## Known limits
 
-- Verify reads imports with a pattern match, not the TypeScript compiler, and checks Prisma schemas only.
+- Verify finds imports with a small scanner that skips comments and template strings, not the TypeScript
+  compiler, so seams installs with no dependencies. It checks Prisma schemas only.
 - The review loop is copy and paste. A command that sends notes straight back to the agent is next.
 - Transactions, sync vs async calls and contract versions aren't modelled yet.
 - The checker doesn't know which tests the change needs; the skill asks for one per new command and invariant.

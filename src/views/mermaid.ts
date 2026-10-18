@@ -4,6 +4,7 @@
 import type { Entity, Plan } from "../ast.ts";
 import { indexPlan } from "../check.ts";
 import { walk } from "../walk.ts";
+import { refName, typeLabel } from "../types.ts";
 
 export function systemDiagram(plan: Plan): string {
   const ix = indexPlan(plan);
@@ -48,19 +49,4 @@ export function erDiagram(entities: Entity[]): string {
     }
   }
   return lines.join("\n");
-}
-
-function refName(t: Entity["fields"][number]["type"]): string | null {
-  if (t.kind === "ref") return t.name;
-  if (t.kind === "list" || t.kind === "optional") return refName(t.of);
-  return null;
-}
-
-export function typeLabel(t: Entity["fields"][number]["type"]): string {
-  switch (t.kind) {
-    case "prim": return t.name;
-    case "ref": return t.name;
-    case "list": return `${typeLabel(t.of)}[]`;
-    case "optional": return `${typeLabel(t.of)}?`;
-  }
 }

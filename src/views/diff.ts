@@ -7,7 +7,7 @@
 //   additive   nothing existing has to change
 
 import type { Contract, Field, Module, Plan, TypeDef } from "../ast.ts";
-import { typeLabel } from "./mermaid.ts";
+import { typeLabel } from "../types.ts";
 import { ids } from "../ids.ts";
 import { walk } from "../walk.ts";
 
@@ -76,7 +76,7 @@ export function diff(before: Plan, after: Plan): Change[] {
       }
 
       // 1b. physical storage
-      const stores = match(a.stores ?? [], b.stores ?? []);
+      const stores = match(a.stores, b.stores);
       for (const st of stores.added) push(mod, "migration", `new ${st.engine} store ${st.name}`, undefined, ids.store(mod, st.name), `new ${st.engine} store`);
       for (const st of stores.removed) push(mod, "migration", `store ${st.name} removed`, undefined, ids.module(mod), `store ${st.name} removed`);
       for (const [sa, sb] of stores.both) {
@@ -89,22 +89,22 @@ export function diff(before: Plan, after: Plan): Change[] {
           const bid = ids.binding(mod, sb.name, xb.entity);
           const at = (short: string) => push(mod, "migration", `${xb.table}: ${short}`, undefined, bid, short);
           if (xa.table !== xb.table) at(`renamed from ${xa.table}`);
-          const ia = new Set((xa.indexes ?? []).map((i) => i.on.join(", "))), ib = new Set((xb.indexes ?? []).map((i) => i.on.join(", ")));
+          const ia = new Set(xa.indexes.map((i) => i.on.join(", "))), ib = new Set(xb.indexes.map((i) => i.on.join(", ")));
           for (const i of ib) if (!ia.has(i)) at(`add index (${i})`);
           for (const i of ia) if (!ib.has(i)) at(`drop index (${i})`);
           if (xa.pk !== xb.pk || xa.sk !== xb.sk) at(`re-key every item: ${xb.pk}${xb.sk ? ` / ${xb.sk}` : ""}`);
-          const ga = new Set((xa.gsis ?? []).map((g) => g.name));
-          for (const g of xb.gsis ?? []) if (!ga.has(g.name)) at(`new index ${g.name} (backfills existing items)`);
-          for (const g of xa.gsis ?? []) if (!(xb.gsis ?? []).some((x) => x.name === g.name)) at(`drop index ${g.name}`);
-          for (const c of xb.columns ?? []) {
-            const prev = (xa.columns ?? []).find((y) => y.field === c.field);
+          const ga = new Set(xa.gsis.map((g) => g.name));
+          for (const g of xb.gsis) if (!ga.has(g.name)) at(`new index ${g.name} (backfills existing items)`);
+          for (const g of xa.gsis) if (!xb.gsis.some((x) => x.name === g.name)) at(`drop index ${g.name}`);
+          for (const c of xb.columns) {
+            const prev = xa.columns.find((y) => y.field === c.field);
             if (prev && prev.type !== c.type && c.type) at(`${c.column ?? c.field}: ${prev.type ?? "default"} → ${c.type}`);
           }
         }
       }
 
       // 3b. endpoints: removing or tightening one breaks its callers
-      const eps = match(a.endpoints ?? [], b.endpoints ?? []);
+      const eps = match(a.endpoints, b.endpoints);
       for (const e of eps.added) push(mod, "additive", `new endpoint ${e.name}`, undefined, ids.endpoint(mod, e.name), "new endpoint");
       for (const e of eps.removed) push(mod, "breaking", `endpoint ${e.name} removed`, undefined, ids.module(mod), `endpoint ${e.name} removed`);
       for (const [ea, eb] of eps.both) {
@@ -115,7 +115,7 @@ export function diff(before: Plan, after: Plan): Change[] {
 
       // 4-6. wiring, signals, tests: nothing outside the module changes,
       // except a dashboard or alert that reads a metric that goes away
-      const ps = match(a.ports ?? [], b.ports ?? []);
+      const ps = match(a.ports, b.ports);
       for (const p of ps.added) push(mod, "internal", `new port ${p.name}: ${p.purpose}`, undefined, ids.port(mod, p.name), "new port");
       for (const p of ps.removed) push(mod, "internal", `port ${p.name} removed`);
       for (const [pa, pb] of ps.both) {
@@ -123,7 +123,7 @@ export function diff(before: Plan, after: Plan): Change[] {
         for (const x of pb.adapters) if (!pa.adapters.some((y) => y.name === x.name)) push(mod, "internal", `${pb.name}: new ${x.env} adapter ${x.name}`, undefined, pid, `new ${x.env} adapter ${x.name}`);
         if (!pa.injected && pb.injected) push(mod, "internal", `${pb.name}: now injected`, undefined, pid, "now injected");
       }
-      const ss = match(a.signals ?? [], b.signals ?? []);
+      const ss = match(a.signals, b.signals);
       for (const x of ss.added) push(mod, "additive", `new ${x.type} ${x.name}`, undefined, ids.signal(mod, x.name), `new ${x.type}`);
       for (const x of ss.removed) {
         const read = x.type === "metric" || x.alert;
@@ -134,12 +134,12 @@ export function diff(before: Plan, after: Plan): Change[] {
         if (gone.length && xb.type === "metric") push(mod, "breaking", `${xb.name}: drops label ${gone.join(", ")}`, undefined, ids.signal(mod, xb.name), `drops label ${gone.join(", ")}`);
         if (xa.alert !== xb.alert) push(mod, "internal", `${xb.name}: alert ${xb.alert ?? "removed"}`, undefined, ids.signal(mod, xb.name), `alert ${xb.alert ?? "removed"}`);
       }
-      const ts = match(a.tests ?? [], b.tests ?? []);
+      const ts = match(a.tests, b.tests);
       for (const x of ts.added) push(mod, "internal", `new ${x.level} test: ${x.name}`, undefined, ids.test(mod, x.name), `new ${x.level} test`);
       for (const x of ts.removed) push(mod, "internal", `${x.level} test removed: ${x.name}`);
 
-      for (const g of b.gaps ?? []) if (!(a.gaps ?? []).some((x) => x.module === g.module)) push(mod, "internal", `new gap: the code reaches ${g.module} outside the model`);
-      for (const g of a.gaps ?? []) if (!(b.gaps ?? []).some((x) => x.module === g.module)) push(mod, "internal", `closes the gap with ${g.module}`);
+      for (const g of b.gaps) if (!a.gaps.some((x) => x.module === g.module)) push(mod, "internal", `new gap: the code reaches ${g.module} outside the model`);
+      for (const g of a.gaps) if (!b.gaps.some((x) => x.module === g.module)) push(mod, "internal", `closes the gap with ${g.module}`);
 
       // 2. module split
       const ua = new Set(a.uses.map((u) => u.contract)), ub = new Set(b.uses.map((u) => u.contract));

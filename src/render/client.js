@@ -463,6 +463,7 @@
         h("div", { class: "title" },
           h("span", { class: "name" }, m.name),
           m.depth === "stub" ? h("span", { class: "badge" }, "not mapped") : null,
+          hubs(tree()).has(m.id) ? h("span", { class: "badge hub", title: "Its call wires are hidden until you select it." }, `used by ${hubs(tree()).get(m.id)} modules`) : null,
           tally(all),
           close ? h("button", { class: "x", "aria-label": `Close ${m.name}`, onclick: (ev) => { ev.stopPropagation(); close(); } }, "×") : null),
         h("p", { class: "purpose" }, terms(m.purpose)),
@@ -866,6 +867,20 @@
   document.addEventListener("focusout", () => tipFor(null));
 
   // ---- wires --------------------------------------------------------------------
+  // Foundation modules: top-level, depending on no other top-level module,
+  // and used by at least three and by 60% of the rest. Their wires say little
+  // ("everything uses the model") and hide the ones that matter.
+  function hubs(t) {
+    const top = (id) => id.split("/")[0];
+    const out = new Map();
+    for (const m of t.modules) {
+      const users = new Set(m.usedBy.map(top).filter((u) => u !== m.id));
+      const leaf = !t.edges.some((e) => e.kind === "call" && top(e.from) === m.id && top(e.to) !== m.id);
+      if (leaf && users.size >= 3 && users.size >= 0.6 * (t.modules.length - 1)) out.set(m.id, users.size);
+    }
+    return out;
+  }
+
   function drawWires() {
     const layer = document.getElementById("layer"), svg = document.getElementById("wires"), over = document.getElementById("type-wires");
     if (!layer || !svg || !over) return;
@@ -927,6 +942,7 @@
     };
     const sel = state.selected;
     const before = new Set(view.current.edges.map((e) => `${e.kind} ${e.from} ${e.to}`));
+    const hub = hubs(tree());
 
     for (const e of tree().edges) {
       const call = e.kind === "call";
@@ -944,6 +960,9 @@
       // A module and what sits inside it are already related by nesting.
       if (!from || !to || from === to || from.contains(to) || to.contains(from)) continue;
       const hot = sel && (under(e.from, sel) || under(e.to, sel) || under(sel, e.to));
+      // Calls into a module almost everything uses would cover the map;
+      // its card says so instead, and the wires show when it is selected.
+      if (call && hub.has(e.to.split("/")[0]) && !hot) continue;
       const fresh = state.tab === "change" && !before.has(`${e.kind} ${e.from} ${e.to}`);
       svg.append(s("path", {
         d: link(from, to, call ? 0 : 10),

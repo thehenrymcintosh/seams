@@ -53,7 +53,7 @@ export type Module = Located & {
   tests: TestCase[];
   // Where the code knowingly depends on another module outside the model:
   // `seams verify` accepts those imports, and says when one is gone.
-  gaps?: Gap[];
+  gaps: Gap[];
   // Sub-modules sit inside this module's boundary. Their contracts are
   // visible to their siblings and to this module, but not to anything
   // outside it: from outside, only this module's own contracts count.
@@ -122,12 +122,12 @@ export type Binding = Located & {
   table: string;                 // table, DynamoDB table, key prefix or bucket path
   // Relational stores. Columns are derived from the entity's fields; list
   // only the ones whose name or type differs from the default.
-  columns?: Column[];
-  indexes?: PhysicalIndex[];
+  columns: Column[];
+  indexes: PhysicalIndex[];
   // Key-value stores. Templates name entity fields in braces: "ENV#{envelopeId}".
   pk?: string;
   sk?: string;
-  gsis?: SecondaryIndex[];
+  gsis: SecondaryIndex[];
   ttl?: string;                  // field that expires the item
 };
 
