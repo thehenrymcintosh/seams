@@ -1,0 +1,13 @@
+{
+  "name": "plan-ast",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "render": "node run.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p out/v2/skeleton/tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.0"
+  }
+}

@@ -1,0 +1,1587 @@
+{
+  "format": "plan-doc/1",
+  "title": "Take payment at checkout",
+  "intent": "We're adding card payments to checkout. Orders should only count as placed once the money is captured.",
+  "mode": "plan",
+  "current": {
+    "kind": "plan",
+    "name": "shop",
+    "modules": [
+      {
+        "kind": "module",
+        "name": "Orders",
+        "purpose": "Turns a customer's basket into an order and tracks it to completion.",
+        "depth": "mapped",
+        "entities": [
+          {
+            "kind": "entity",
+            "name": "Order",
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "customerId",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "status",
+                "type": {
+                  "kind": "ref",
+                  "name": "OrderStatus"
+                }
+              },
+              {
+                "name": "total",
+                "type": {
+                  "kind": "prim",
+                  "name": "decimal"
+                }
+              },
+              {
+                "name": "placedAt",
+                "type": {
+                  "kind": "prim",
+                  "name": "datetime"
+                }
+              }
+            ],
+            "key": [
+              "id"
+            ],
+            "indexes": [
+              {
+                "fields": [
+                  "customerId"
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "entity",
+            "name": "OrderLine",
+            "doc": "Price is copied at order time; Catalog prices may change later.",
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "orderId",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "productId",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "quantity",
+                "type": {
+                  "kind": "prim",
+                  "name": "int"
+                }
+              },
+              {
+                "name": "unitPrice",
+                "type": {
+                  "kind": "prim",
+                  "name": "decimal"
+                }
+              }
+            ],
+            "key": [
+              "id"
+            ],
+            "indexes": [
+              {
+                "fields": [
+                  "orderId"
+                ]
+              }
+            ]
+          }
+        ],
+        "aggregates": [
+          {
+            "kind": "aggregate",
+            "name": "Order",
+            "root": "Order",
+            "members": [
+              "OrderLine"
+            ],
+            "invariants": [
+              "Total equals the sum of its lines.",
+              "Lines cannot change once the order is placed."
+            ]
+          }
+        ],
+        "repositories": [
+          {
+            "kind": "repository",
+            "name": "OrderRepository",
+            "entity": "Order",
+            "methods": [
+              {
+                "kind": "get"
+              },
+              {
+                "kind": "find",
+                "by": [
+                  "customerId"
+                ]
+              },
+              {
+                "kind": "save"
+              }
+            ]
+          }
+        ],
+        "provides": [
+          {
+            "kind": "contract",
+            "name": "Orders",
+            "types": [
+              {
+                "kind": "enum",
+                "name": "OrderStatus",
+                "values": [
+                  "Placed",
+                  "Cancelled"
+                ]
+              },
+              {
+                "kind": "record",
+                "name": "LineInput",
+                "fields": [
+                  {
+                    "name": "productId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "quantity",
+                    "type": {
+                      "kind": "prim",
+                      "name": "int"
+                    }
+                  }
+                ]
+              },
+              {
+                "kind": "record",
+                "name": "OrderLineView",
+                "fields": [
+                  {
+                    "name": "product",
+                    "type": {
+                      "kind": "ref",
+                      "name": "Catalog.ProductSummary"
+                    }
+                  },
+                  {
+                    "name": "quantity",
+                    "type": {
+                      "kind": "prim",
+                      "name": "int"
+                    }
+                  },
+                  {
+                    "name": "unitPrice",
+                    "type": {
+                      "kind": "prim",
+                      "name": "decimal"
+                    }
+                  }
+                ]
+              },
+              {
+                "kind": "record",
+                "name": "OrderView",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "status",
+                    "type": {
+                      "kind": "ref",
+                      "name": "OrderStatus"
+                    }
+                  },
+                  {
+                    "name": "total",
+                    "type": {
+                      "kind": "prim",
+                      "name": "decimal"
+                    }
+                  },
+                  {
+                    "name": "lines",
+                    "type": {
+                      "kind": "list",
+                      "of": {
+                        "kind": "ref",
+                        "name": "OrderLineView"
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "operations": [
+              {
+                "kind": "operation",
+                "name": "PlaceOrder",
+                "mode": "command",
+                "input": [
+                  {
+                    "name": "customerId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "lines",
+                    "type": {
+                      "kind": "list",
+                      "of": {
+                        "kind": "ref",
+                        "name": "LineInput"
+                      }
+                    }
+                  }
+                ],
+                "output": {
+                  "kind": "ref",
+                  "name": "OrderView"
+                },
+                "errors": [
+                  "EmptyOrder",
+                  "UnknownProduct"
+                ]
+              },
+              {
+                "kind": "operation",
+                "name": "CancelOrder",
+                "mode": "command",
+                "input": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  }
+                ],
+                "output": null,
+                "errors": [
+                  "NotFound",
+                  "AlreadyCancelled"
+                ]
+              },
+              {
+                "kind": "operation",
+                "name": "GetOrder",
+                "mode": "query",
+                "input": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  }
+                ],
+                "output": {
+                  "kind": "ref",
+                  "name": "OrderView"
+                },
+                "errors": [
+                  "NotFound"
+                ]
+              },
+              {
+                "kind": "operation",
+                "name": "ListForCustomer",
+                "mode": "query",
+                "input": [
+                  {
+                    "name": "customerId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  }
+                ],
+                "output": {
+                  "kind": "list",
+                  "of": {
+                    "kind": "ref",
+                    "name": "OrderView"
+                  }
+                },
+                "errors": []
+              }
+            ],
+            "events": [
+              {
+                "kind": "event",
+                "name": "OrderPlaced",
+                "payload": [
+                  {
+                    "name": "orderId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "total",
+                    "type": {
+                      "kind": "prim",
+                      "name": "decimal"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "uses": [
+          {
+            "contract": "Catalog",
+            "subscribes": []
+          },
+          {
+            "contract": "Customers",
+            "subscribes": []
+          }
+        ],
+        "modules": []
+      },
+      {
+        "kind": "module",
+        "name": "Catalog",
+        "purpose": "Owns what can be sold and at what price.",
+        "depth": "mapped",
+        "entities": [
+          {
+            "kind": "entity",
+            "name": "Product",
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "sku",
+                "type": {
+                  "kind": "prim",
+                  "name": "string"
+                }
+              },
+              {
+                "name": "name",
+                "type": {
+                  "kind": "prim",
+                  "name": "string"
+                }
+              },
+              {
+                "name": "price",
+                "type": {
+                  "kind": "prim",
+                  "name": "decimal"
+                }
+              },
+              {
+                "name": "active",
+                "type": {
+                  "kind": "prim",
+                  "name": "boolean"
+                }
+              }
+            ],
+            "key": [
+              "id"
+            ],
+            "indexes": [
+              {
+                "fields": [
+                  "sku"
+                ],
+                "unique": true
+              },
+              {
+                "fields": [
+                  "active"
+                ]
+              }
+            ]
+          }
+        ],
+        "aggregates": [],
+        "repositories": [
+          {
+            "kind": "repository",
+            "name": "ProductRepository",
+            "entity": "Product",
+            "methods": [
+              {
+                "kind": "get"
+              },
+              {
+                "kind": "find",
+                "by": [
+                  "sku"
+                ]
+              },
+              {
+                "kind": "find",
+                "by": [
+                  "active"
+                ]
+              },
+              {
+                "kind": "save"
+              }
+            ]
+          }
+        ],
+        "provides": [
+          {
+            "kind": "contract",
+            "name": "Catalog",
+            "types": [
+              {
+                "kind": "record",
+                "name": "ProductSummary",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "name",
+                    "type": {
+                      "kind": "prim",
+                      "name": "string"
+                    }
+                  },
+                  {
+                    "name": "price",
+                    "type": {
+                      "kind": "prim",
+                      "name": "decimal"
+                    }
+                  }
+                ]
+              }
+            ],
+            "operations": [
+              {
+                "kind": "operation",
+                "name": "GetProduct",
+                "mode": "query",
+                "input": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  }
+                ],
+                "output": {
+                  "kind": "ref",
+                  "name": "ProductSummary"
+                },
+                "errors": [
+                  "NotFound"
+                ]
+              },
+              {
+                "kind": "operation",
+                "name": "ListActive",
+                "mode": "query",
+                "input": [],
+                "output": {
+                  "kind": "list",
+                  "of": {
+                    "kind": "ref",
+                    "name": "ProductSummary"
+                  }
+                },
+                "errors": []
+              }
+            ],
+            "events": [
+              {
+                "kind": "event",
+                "name": "ProductPriceChanged",
+                "payload": [
+                  {
+                    "name": "productId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "price",
+                    "type": {
+                      "kind": "prim",
+                      "name": "decimal"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "uses": [],
+        "modules": []
+      },
+      {
+        "kind": "module",
+        "name": "Customers",
+        "purpose": "Accounts, addresses and sign-in.",
+        "depth": "stub",
+        "sources": [
+          {
+            "path": "src/customers/"
+          }
+        ],
+        "entities": [],
+        "aggregates": [],
+        "repositories": [],
+        "provides": [
+          {
+            "kind": "contract",
+            "name": "Customers",
+            "types": [],
+            "operations": [],
+            "events": []
+          }
+        ],
+        "uses": [],
+        "modules": []
+      },
+      {
+        "kind": "module",
+        "name": "Notifications",
+        "purpose": "Emails and push messages to customers.",
+        "depth": "stub",
+        "sources": [
+          {
+            "path": "src/notify/"
+          }
+        ],
+        "entities": [],
+        "aggregates": [],
+        "repositories": [],
+        "provides": [],
+        "uses": [
+          {
+            "contract": "Orders",
+            "subscribes": [
+              "OrderPlaced"
+            ]
+          }
+        ],
+        "modules": []
+      }
+    ]
+  },
+  "proposed": {
+    "kind": "plan",
+    "name": "shop",
+    "modules": [
+      {
+        "kind": "module",
+        "name": "Orders",
+        "purpose": "Turns a customer's basket into an order and tracks it to completion.",
+        "depth": "mapped",
+        "entities": [
+          {
+            "kind": "entity",
+            "name": "Order",
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "customerId",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "status",
+                "type": {
+                  "kind": "ref",
+                  "name": "OrderStatus"
+                }
+              },
+              {
+                "name": "total",
+                "type": {
+                  "kind": "prim",
+                  "name": "decimal"
+                }
+              },
+              {
+                "name": "placedAt",
+                "type": {
+                  "kind": "prim",
+                  "name": "datetime"
+                }
+              },
+              {
+                "name": "paymentId",
+                "type": {
+                  "kind": "optional",
+                  "of": {
+                    "kind": "prim",
+                    "name": "uuid"
+                  }
+                }
+              }
+            ],
+            "key": [
+              "id"
+            ],
+            "indexes": [
+              {
+                "fields": [
+                  "customerId"
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "entity",
+            "name": "OrderLine",
+            "doc": "Price is copied at order time; Catalog prices may change later.",
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "orderId",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "productId",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "quantity",
+                "type": {
+                  "kind": "prim",
+                  "name": "int"
+                }
+              },
+              {
+                "name": "unitPrice",
+                "type": {
+                  "kind": "prim",
+                  "name": "decimal"
+                }
+              }
+            ],
+            "key": [
+              "id"
+            ],
+            "indexes": [
+              {
+                "fields": [
+                  "orderId"
+                ]
+              }
+            ]
+          }
+        ],
+        "aggregates": [
+          {
+            "kind": "aggregate",
+            "name": "Order",
+            "root": "Order",
+            "members": [
+              "OrderLine"
+            ],
+            "invariants": [
+              "Total equals the sum of its lines.",
+              "Lines cannot change once the order is placed.",
+              "Status only moves forward: AwaitingPayment, then Paid or PaymentFailed."
+            ]
+          }
+        ],
+        "repositories": [
+          {
+            "kind": "repository",
+            "name": "OrderRepository",
+            "entity": "Order",
+            "methods": [
+              {
+                "kind": "get"
+              },
+              {
+                "kind": "find",
+                "by": [
+                  "customerId"
+                ]
+              },
+              {
+                "kind": "save"
+              }
+            ]
+          }
+        ],
+        "provides": [
+          {
+            "kind": "contract",
+            "name": "Orders",
+            "types": [
+              {
+                "kind": "enum",
+                "name": "OrderStatus",
+                "values": [
+                  "AwaitingPayment",
+                  "Paid",
+                  "PaymentFailed",
+                  "Cancelled"
+                ]
+              },
+              {
+                "kind": "record",
+                "name": "LineInput",
+                "fields": [
+                  {
+                    "name": "productId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "quantity",
+                    "type": {
+                      "kind": "prim",
+                      "name": "int"
+                    }
+                  }
+                ]
+              },
+              {
+                "kind": "record",
+                "name": "OrderLineView",
+                "fields": [
+                  {
+                    "name": "product",
+                    "type": {
+                      "kind": "ref",
+                      "name": "Catalog.ProductSummary"
+                    }
+                  },
+                  {
+                    "name": "quantity",
+                    "type": {
+                      "kind": "prim",
+                      "name": "int"
+                    }
+                  },
+                  {
+                    "name": "unitPrice",
+                    "type": {
+                      "kind": "prim",
+                      "name": "decimal"
+                    }
+                  }
+                ]
+              },
+              {
+                "kind": "record",
+                "name": "OrderView",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "status",
+                    "type": {
+                      "kind": "ref",
+                      "name": "OrderStatus"
+                    }
+                  },
+                  {
+                    "name": "total",
+                    "type": {
+                      "kind": "prim",
+                      "name": "decimal"
+                    }
+                  },
+                  {
+                    "name": "lines",
+                    "type": {
+                      "kind": "list",
+                      "of": {
+                        "kind": "ref",
+                        "name": "OrderLineView"
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "operations": [
+              {
+                "kind": "operation",
+                "name": "PlaceOrder",
+                "mode": "command",
+                "input": [
+                  {
+                    "name": "customerId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "lines",
+                    "type": {
+                      "kind": "list",
+                      "of": {
+                        "kind": "ref",
+                        "name": "LineInput"
+                      }
+                    }
+                  }
+                ],
+                "output": {
+                  "kind": "ref",
+                  "name": "OrderView"
+                },
+                "errors": [
+                  "EmptyOrder",
+                  "UnknownProduct"
+                ]
+              },
+              {
+                "kind": "operation",
+                "name": "CancelOrder",
+                "mode": "command",
+                "input": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  }
+                ],
+                "output": null,
+                "errors": [
+                  "NotFound",
+                  "AlreadyCancelled",
+                  "AlreadyPaid"
+                ]
+              },
+              {
+                "kind": "operation",
+                "name": "GetOrder",
+                "mode": "query",
+                "input": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  }
+                ],
+                "output": {
+                  "kind": "ref",
+                  "name": "OrderView"
+                },
+                "errors": [
+                  "NotFound"
+                ]
+              },
+              {
+                "kind": "operation",
+                "name": "ListForCustomer",
+                "mode": "query",
+                "input": [
+                  {
+                    "name": "customerId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  }
+                ],
+                "output": {
+                  "kind": "list",
+                  "of": {
+                    "kind": "ref",
+                    "name": "OrderView"
+                  }
+                },
+                "errors": []
+              }
+            ],
+            "events": [
+              {
+                "kind": "event",
+                "name": "OrderPlaced",
+                "payload": [
+                  {
+                    "name": "orderId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "total",
+                    "type": {
+                      "kind": "prim",
+                      "name": "decimal"
+                    }
+                  }
+                ]
+              },
+              {
+                "kind": "event",
+                "name": "OrderPaid",
+                "payload": [
+                  {
+                    "name": "orderId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "uses": [
+          {
+            "contract": "Catalog",
+            "subscribes": []
+          },
+          {
+            "contract": "Payments",
+            "subscribes": [
+              "PaymentCaptured",
+              "PaymentFailed"
+            ]
+          },
+          {
+            "contract": "Customers",
+            "subscribes": []
+          }
+        ],
+        "modules": []
+      },
+      {
+        "kind": "module",
+        "name": "Catalog",
+        "purpose": "Owns what can be sold and at what price.",
+        "depth": "mapped",
+        "entities": [
+          {
+            "kind": "entity",
+            "name": "Product",
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "sku",
+                "type": {
+                  "kind": "prim",
+                  "name": "string"
+                }
+              },
+              {
+                "name": "name",
+                "type": {
+                  "kind": "prim",
+                  "name": "string"
+                }
+              },
+              {
+                "name": "price",
+                "type": {
+                  "kind": "prim",
+                  "name": "decimal"
+                }
+              },
+              {
+                "name": "active",
+                "type": {
+                  "kind": "prim",
+                  "name": "boolean"
+                }
+              }
+            ],
+            "key": [
+              "id"
+            ],
+            "indexes": [
+              {
+                "fields": [
+                  "sku"
+                ],
+                "unique": true
+              },
+              {
+                "fields": [
+                  "active"
+                ]
+              }
+            ]
+          }
+        ],
+        "aggregates": [],
+        "repositories": [
+          {
+            "kind": "repository",
+            "name": "ProductRepository",
+            "entity": "Product",
+            "methods": [
+              {
+                "kind": "get"
+              },
+              {
+                "kind": "find",
+                "by": [
+                  "sku"
+                ]
+              },
+              {
+                "kind": "find",
+                "by": [
+                  "active"
+                ]
+              },
+              {
+                "kind": "save"
+              }
+            ]
+          }
+        ],
+        "provides": [
+          {
+            "kind": "contract",
+            "name": "Catalog",
+            "types": [
+              {
+                "kind": "record",
+                "name": "ProductSummary",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "name",
+                    "type": {
+                      "kind": "prim",
+                      "name": "string"
+                    }
+                  },
+                  {
+                    "name": "price",
+                    "type": {
+                      "kind": "prim",
+                      "name": "decimal"
+                    }
+                  }
+                ]
+              }
+            ],
+            "operations": [
+              {
+                "kind": "operation",
+                "name": "GetProduct",
+                "mode": "query",
+                "input": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  }
+                ],
+                "output": {
+                  "kind": "ref",
+                  "name": "ProductSummary"
+                },
+                "errors": [
+                  "NotFound"
+                ]
+              },
+              {
+                "kind": "operation",
+                "name": "ListActive",
+                "mode": "query",
+                "input": [],
+                "output": {
+                  "kind": "list",
+                  "of": {
+                    "kind": "ref",
+                    "name": "ProductSummary"
+                  }
+                },
+                "errors": []
+              }
+            ],
+            "events": [
+              {
+                "kind": "event",
+                "name": "ProductPriceChanged",
+                "payload": [
+                  {
+                    "name": "productId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "price",
+                    "type": {
+                      "kind": "prim",
+                      "name": "decimal"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "uses": [],
+        "modules": []
+      },
+      {
+        "kind": "module",
+        "name": "Payments",
+        "purpose": "Collects money for an order and reports the outcome. Knows nothing about what was bought.",
+        "depth": "mapped",
+        "entities": [
+          {
+            "kind": "entity",
+            "name": "Payment",
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "orderId",
+                "type": {
+                  "kind": "prim",
+                  "name": "uuid"
+                }
+              },
+              {
+                "name": "amount",
+                "type": {
+                  "kind": "prim",
+                  "name": "decimal"
+                }
+              },
+              {
+                "name": "status",
+                "type": {
+                  "kind": "ref",
+                  "name": "PaymentStatus"
+                }
+              },
+              {
+                "name": "providerRef",
+                "type": {
+                  "kind": "optional",
+                  "of": {
+                    "kind": "prim",
+                    "name": "string"
+                  }
+                }
+              },
+              {
+                "name": "createdAt",
+                "type": {
+                  "kind": "prim",
+                  "name": "datetime"
+                }
+              }
+            ],
+            "key": [
+              "id"
+            ],
+            "indexes": [
+              {
+                "fields": [
+                  "orderId"
+                ]
+              }
+            ]
+          }
+        ],
+        "aggregates": [],
+        "repositories": [
+          {
+            "kind": "repository",
+            "name": "PaymentRepository",
+            "entity": "Payment",
+            "methods": [
+              {
+                "kind": "get"
+              },
+              {
+                "kind": "find",
+                "by": [
+                  "orderId"
+                ]
+              },
+              {
+                "kind": "save"
+              }
+            ]
+          }
+        ],
+        "provides": [
+          {
+            "kind": "contract",
+            "name": "Payments",
+            "types": [
+              {
+                "kind": "enum",
+                "name": "PaymentStatus",
+                "values": [
+                  "Pending",
+                  "Captured",
+                  "Failed"
+                ]
+              }
+            ],
+            "operations": [
+              {
+                "kind": "operation",
+                "name": "StartPayment",
+                "mode": "command",
+                "input": [
+                  {
+                    "name": "orderId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "amount",
+                    "type": {
+                      "kind": "prim",
+                      "name": "decimal"
+                    }
+                  }
+                ],
+                "output": {
+                  "kind": "prim",
+                  "name": "uuid"
+                },
+                "errors": [
+                  "AlreadyPaid"
+                ]
+              },
+              {
+                "kind": "operation",
+                "name": "GetStatus",
+                "mode": "query",
+                "input": [
+                  {
+                    "name": "orderId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  }
+                ],
+                "output": {
+                  "kind": "ref",
+                  "name": "PaymentStatus"
+                },
+                "errors": [
+                  "NotFound"
+                ]
+              }
+            ],
+            "events": [
+              {
+                "kind": "event",
+                "name": "PaymentCaptured",
+                "payload": [
+                  {
+                    "name": "paymentId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "orderId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  }
+                ]
+              },
+              {
+                "kind": "event",
+                "name": "PaymentFailed",
+                "payload": [
+                  {
+                    "name": "orderId",
+                    "type": {
+                      "kind": "prim",
+                      "name": "uuid"
+                    }
+                  },
+                  {
+                    "name": "reason",
+                    "type": {
+                      "kind": "prim",
+                      "name": "string"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "uses": [
+          {
+            "contract": "Gateway",
+            "subscribes": []
+          }
+        ],
+        "modules": [
+          {
+            "kind": "module",
+            "name": "Gateway",
+            "purpose": "Talks to the card provider. One implementation per provider; nothing outside Payments sees it.",
+            "depth": "mapped",
+            "entities": [],
+            "aggregates": [],
+            "repositories": [],
+            "provides": [
+              {
+                "kind": "contract",
+                "name": "Gateway",
+                "types": [],
+                "operations": [
+                  {
+                    "kind": "operation",
+                    "name": "Charge",
+                    "mode": "command",
+                    "input": [
+                      {
+                        "name": "amount",
+                        "type": {
+                          "kind": "prim",
+                          "name": "decimal"
+                        }
+                      },
+                      {
+                        "name": "reference",
+                        "type": {
+                          "kind": "prim",
+                          "name": "string"
+                        }
+                      }
+                    ],
+                    "output": {
+                      "kind": "prim",
+                      "name": "string"
+                    },
+                    "errors": [
+                      "Declined",
+                      "ProviderDown"
+                    ]
+                  }
+                ],
+                "events": []
+              }
+            ],
+            "uses": [],
+            "modules": []
+          }
+        ]
+      },
+      {
+        "kind": "module",
+        "name": "Customers",
+        "purpose": "Accounts, addresses and sign-in.",
+        "depth": "stub",
+        "sources": [
+          {
+            "path": "src/customers/"
+          }
+        ],
+        "entities": [],
+        "aggregates": [],
+        "repositories": [],
+        "provides": [
+          {
+            "kind": "contract",
+            "name": "Customers",
+            "types": [],
+            "operations": [],
+            "events": []
+          }
+        ],
+        "uses": [],
+        "modules": []
+      },
+      {
+        "kind": "module",
+        "name": "Notifications",
+        "purpose": "Emails and push messages to customers.",
+        "depth": "stub",
+        "sources": [
+          {
+            "path": "src/notify/"
+          }
+        ],
+        "entities": [],
+        "aggregates": [],
+        "repositories": [],
+        "provides": [],
+        "uses": [
+          {
+            "contract": "Orders",
+            "subscribes": [
+              "OrderPlaced"
+            ]
+          }
+        ],
+        "modules": []
+      }
+    ]
+  },
+  "slices": [
+    {
+      "name": "Payments on its own",
+      "goal": "Ship the Payments module with its table and contract. Nothing calls it yet, so it can be tested against the provider in isolation.",
+      "nodes": [
+        "Payments"
+      ]
+    },
+    {
+      "name": "Orders takes payment",
+      "goal": "PlaceOrder starts a payment and the order follows the payment events. Includes the status migration.",
+      "nodes": [
+        "Orders"
+      ],
+      "notes": "Existing Placed orders become Paid: they were taken before payments existed."
+    }
+  ],
+  "questions": [
+    {
+      "text": "When a payment fails, should the order be cancelled or left open for the customer to retry?",
+      "node": "Orders/contract/Orders",
+      "options": [
+        "Cancel",
+        "Keep open for 24h"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "text": "Payments stores the order id but never calls Orders.",
+      "why": "Orders depends on Payments, not the other way round. That avoids a cycle and keeps Payments reusable for subscriptions later.",
+      "node": "Payments"
+    }
+  ],
+  "facts": {
+    "Orders/contract/Orders": [
+      {
+        "label": "Call sites",
+        "value": 9,
+        "detail": "example value; slice 3 reads these from the code"
+      }
+    ],
+    "Orders": [
+      {
+        "label": "Most complex function",
+        "value": "placeOrder (17)",
+        "detail": "example value"
+      }
+    ]
+  }
+}

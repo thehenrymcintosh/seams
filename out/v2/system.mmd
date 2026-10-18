@@ -1,0 +1,26 @@
+flowchart LR
+  subgraph Catalog["Catalog"]
+    direction TB
+    Catalog_c{{"Catalog contract"}}
+    Catalog_Product[("Product")]
+  end
+  subgraph Orders["Orders"]
+    direction TB
+    Orders_c{{"Orders contract"}}
+    Orders_Order[("Order")]
+    Orders_OrderLine[("OrderLine")]
+  end
+  subgraph Payments["Payments"]
+    direction TB
+    Payments_c{{"Payments contract"}}
+    Payments_Payment[("Payment")]
+  end
+  subgraph Gateway["Gateway"]
+    direction TB
+    Gateway_c{{"Gateway contract"}}
+  end
+  Orders -->|calls| Catalog_c
+  Orders -->|calls| Payments_c
+  Payments_c -.->|PaymentCaptured| Orders
+  Payments_c -.->|PaymentFailed| Orders
+  Payments -->|calls| Gateway_c
