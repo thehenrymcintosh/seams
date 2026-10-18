@@ -4,14 +4,18 @@
 //   <module>/schema.ts               private: stored entity shapes
 //   <module>/repositories.ts         private: access patterns as interfaces
 //   <module>/index.ts                wiring: deps in, Api + event handlers out
+//   <module>/<store>.sql             relational stores: tables and indexes
+//   <module>/<store>.keys.ts         key-value stores: key builders per item type
+//   <module>/routes.ts               endpoints bound to the operations they call
 //
 // Other modules may import only `*.contract.ts`. Because every cross-module
 // import is a `import type * as X from "../x/X.contract.ts"`, the boundary is
 // visible in the code and checkable with a lint rule.
 
-import type { Contract, Entity, Field, Module, Plan, RepoMethod, TypeExpr } from "../ast.ts";
+import type { Contract, Entity, Field, Module, Plan, RepoMethod, Store, TypeExpr } from "../ast.ts";
 import { posix } from "node:path";
 import { indexPlan } from "../check.ts";
+import { indexName, RELATIONAL, sqlType, templateFields } from "../storage.ts";
 import { walk } from "../walk.ts";
 
 export type Files = Map<string, string>;
@@ -49,8 +53,81 @@ export function skeleton(plan: Plan): Files {
       files.set(`${dir}/repositories.ts`, repositoriesFile(m));
     }
     files.set(`${dir}/index.ts`, indexFile(m, scope));
+    for (const st of m.stores) {
+      const slug = st.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      if (RELATIONAL.has(st.engine)) files.set(`${dir}/${slug}.sql`, sqlFile(m, st));
+      else files.set(`${dir}/${slug}.keys.ts`, keysFile(m, st));
+    }
+    if (m.endpoints.length) files.set(`${dir}/routes.ts`, routesFile(m, ix.contractOwner));
   }
   return files;
+}
+
+// DDL for a relational store. Columns follow the entity unless the binding
+// overrides them; enums referenced by a column become database enums.
+function sqlFile(m: Module, st: Store): string {
+  const enumDefs = new Map(m.provides.flatMap((c) => c.types.filter((t) => t.kind === "enum").map((t) => [t.name, t.values] as const)));
+  const enums = new Set(enumDefs.keys());
+  const used = new Set<string>();
+  const tables = st.holds.map((b) => {
+    const e = m.entities.find((x) => x.name === b.entity)!;
+    const cols = e.fields.map((f) => {
+      const o = b.columns?.find((c) => c.field === f.name);
+      const d = sqlType(f.type, enums);
+      const bare = f.type.kind === "optional" ? f.type.of : f.type;
+      if (bare.kind === "ref" && enums.has(bare.name)) used.add(bare.name);
+      const nullable = o?.nullable ?? d.nullable;
+      return `  "${o?.column ?? f.name}" ${o?.type ?? d.type}${nullable ? "" : " NOT NULL"}${o?.default ? ` DEFAULT ${o.default}` : ""}`;
+    });
+    cols.push(`  PRIMARY KEY (${e.key.map((k) => `"${k}"`).join(", ")})`);
+    const idx = (b.indexes ?? []).map((i) =>
+      `CREATE ${i.unique ? "UNIQUE " : ""}INDEX "${indexName(b, i)}" ON "${b.table}"${i.using ? ` USING ${i.using}` : ""} (${i.on.map((c) => `"${c}"`).join(", ")})${i.where ? ` WHERE ${i.where}` : ""};`);
+    return [`CREATE TABLE "${b.table}" (\n${cols.join(",\n")}\n);`, ...idx].join("\n");
+  });
+  const types = [...used].map((n) => `CREATE TYPE "${n}" AS ENUM (${enumDefs.get(n)!.map((v) => `'${v}'`).join(", ")});`);
+  return [`-- Generated from the plan: ${m.name} / ${st.name} (${st.engine}).`, ...types, ...tables].join("\n\n") + "\n";
+}
+
+// Key builders for a key-value store, one per item type, so every read and
+// write spells its keys the same way.
+function keysFile(m: Module, st: Store): string {
+  const out = [`// Generated from the plan: ${m.name} / ${st.name} (${st.engine}).`, ""];
+  const fn = (tpl: string) => {
+    const fs = templateFields(tpl);
+    return `(k: { ${fs.map((f) => `${f}: string`).join("; ")} }) => \`${tpl.replace(/\{(\w+)\}/g, "${k.$1}")}\``;
+  };
+  for (const b of st.holds) {
+    out.push(`/** ${b.entity} items in "${b.table}". */`);
+    out.push(`export const ${lowerFirst(b.entity)}Keys = {`);
+    out.push(`  table: ${JSON.stringify(b.table)},`);
+    if (b.pk) out.push(`  pk: ${fn(b.pk)},`);
+    if (b.sk) out.push(`  sk: ${fn(b.sk)},`);
+    for (const g of b.gsis ?? []) {
+      out.push(`  ${g.name}: { index: ${JSON.stringify(g.name)}, pk: ${fn(g.pk)}${g.sk ? `, sk: ${fn(g.sk)}` : ""} },`);
+    }
+    if (b.ttl) out.push(`  ttl: ${JSON.stringify(b.ttl)},`);
+    out.push("} as const;", "");
+  }
+  return out.join("\n");
+}
+
+// Each endpoint bound to the operations it calls. The compiler checks the
+// binding against the contract, so a renamed operation breaks the route here.
+function routesFile(m: Module, owners: Map<string, Module>): string {
+  const dir = dirOf(m);
+  const contracts = [...new Set(m.endpoints.flatMap((e) => e.calls.map((c) => c.split(".")[0])))];
+  const imports = contracts.map((c) => `import type * as ${c} from "${rel(dir, dirOf(owners.get(c)!), `${c}.contract.ts`)}";`);
+  const api = contracts.map((c) => `${lowerFirst(c)}: ${c}.${c}Api`).join("; ");
+  const rows = m.endpoints.map((e) => {
+    const calls = e.calls.map((c) => { const [k, o] = c.split("."); return `api.${lowerFirst(k)}.${lowerFirst(o)}`; });
+    return `    { ${e.method ? `method: "${e.method}", ` : ""}${e.protocol === "http" ? "" : `protocol: "${e.protocol}", `}path: ${JSON.stringify(e.path)}, auth: ${JSON.stringify(e.auth)}, audience: "${e.audience}", calls: [${calls.join(", ")}] },`;
+  });
+  return [
+    "// Generated from the plan. Endpoints only parse, authorise and call; no logic here.",
+    ...imports, "",
+    `export function routes(api: { ${api} }) {`,
+    "  return [", ...rows, "  ] as const;", "}", "",
+  ].join("\n");
 }
 
 let dirs = new Map<Module, string>();

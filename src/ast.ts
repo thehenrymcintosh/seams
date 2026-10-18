@@ -7,9 +7,11 @@
 // contract ("Catalog.ProductSummary"). Everything else the checker enforces.
 //
 // The three decision categories map to three parts of a Module:
-//   1. data storage + access  -> entities, repositories
+//   1. data storage + access  -> entities, repositories, and the stores that
+//                                hold them physically (tables, keys, indexes)
 //   2. module split           -> the Module nodes themselves, plus `uses`
-//   3. contracts              -> provides (operations, events, DTO types)
+//   3. contracts              -> provides (operations, events, DTO types),
+//                                and the endpoints that expose them
 
 export type Plan = {
   kind: "plan";
@@ -39,6 +41,8 @@ export type Module = Located & {
   repositories: Repository[];
   provides: Contract[];
   uses: Use[];
+  stores: Store[];
+  endpoints: Endpoint[];
   // Sub-modules sit inside this module's boundary. Their contracts are
   // visible to their siblings and to this module, but not to anything
   // outside it: from outside, only this module's own contracts count.
@@ -85,6 +89,57 @@ export type RepoMethod =
   | { kind: "find"; by: string[] }           // by fields      -> Entity[]
   | { kind: "save" }                         // upsert
   | { kind: "delete" };                      // by primary key
+
+// ---- 1b. Physical storage ---------------------------------------------------------
+//
+// Entities say what is stored; a store says how. One store is one database (or
+// one DynamoDB table, one bucket) owned by the module, and each binding maps
+// an entity onto it. When an entity has a binding, its access patterns are
+// checked against the physical keys and indexes, not the conceptual ones.
+
+export type Engine = "postgres" | "mysql" | "sqlite" | "dynamodb" | "redis" | "s3" | "other";
+
+export type Store = Located & {
+  kind: "store";
+  name: string;
+  engine: Engine;
+  holds: Binding[];
+};
+
+export type Binding = Located & {
+  entity: string;
+  table: string;                 // table, DynamoDB table, key prefix or bucket path
+  // Relational stores. Columns are derived from the entity's fields; list
+  // only the ones whose name or type differs from the default.
+  columns?: Column[];
+  indexes?: PhysicalIndex[];
+  // Key-value stores. Templates name entity fields in braces: "ENV#{envelopeId}".
+  pk?: string;
+  sk?: string;
+  gsis?: SecondaryIndex[];
+  ttl?: string;                  // field that expires the item
+};
+
+export type Column = { field: string; column?: string; type?: string; nullable?: boolean; default?: string };
+export type PhysicalIndex = { name?: string; on: string[]; unique?: boolean; using?: string; where?: string };
+export type SecondaryIndex = { name: string; pk: string; sk?: string };
+
+// ---- 3b. Endpoints ------------------------------------------------------------------
+//
+// How the outside world reaches a contract: an HTTP route, a tRPC procedure,
+// a queue consumer. An endpoint adds a transport, a path and an auth rule,
+// and calls operations; it never holds logic of its own.
+
+export type Endpoint = Located & {
+  kind: "endpoint";
+  name: string;                  // "POST /api/v1/documents/{id}/send" or "recipient.rejectDocumentWithToken"
+  protocol: "http" | "trpc" | "graphql" | "grpc" | "queue" | "cli";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path: string;
+  calls: string[];               // "Contract.Operation", of a contract the module uses or provides
+  auth: string;                  // "session", "api token", "recipient token", "public"
+  audience: "public" | "app" | "internal";
+};
 
 // ---- 3. Contracts between modules --------------------------------------------
 

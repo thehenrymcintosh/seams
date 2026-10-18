@@ -2,8 +2,8 @@
 // only fill in `kind` tags and defaults so a plan reads like a spec.
 
 import type {
-  Aggregate, Contract, Entity, EventDef, Field, Index, Module, Operation, Plan,
-  Primitive, RepoMethod, Repository, SourceRef, TypeDef, TypeExpr, Use,
+  Aggregate, Binding, Contract, Endpoint, Engine, Entity, EventDef, Field, Index, Module, Operation, PhysicalIndex, Plan,
+  Primitive, RepoMethod, Repository, SourceRef, Store, TypeDef, TypeExpr, Use,
 } from "./ast.ts";
 
 // Where a node lives in the code: src("packages/lib/server-only/recipient/", "setDocumentRecipients")
@@ -39,6 +39,8 @@ export const module = (
     uses?: (string | Use)[];
     aggregates?: Aggregate[];
     modules?: Module[];
+    stores?: Store[];
+    endpoints?: Endpoint[];
     sources?: SourceRef[];
     note?: string;
   },
@@ -54,6 +56,8 @@ export const module = (
   repositories: m.repositories ?? [],
   provides: m.provides ?? [],
   uses: (m.uses ?? []).map((u) => (typeof u === "string" ? { contract: u, subscribes: [] } : u)),
+  stores: m.stores ?? [],
+  endpoints: m.endpoints ?? [],
   modules: m.modules ?? [],
 });
 
@@ -138,5 +142,37 @@ export const stub = (
   repositories: [],
   provides: contracts.map((c) => contract(c, {})),
   uses: uses.map((u) => (typeof u === "string" ? { contract: u, subscribes: [] } : u)),
+  stores: [],
+  endpoints: [],
   modules: [],
+});
+
+// ---- storage ----
+// store("main", "postgres", [table("Order", "orders", { indexes: [idx("customerId")] })])
+export const store = (name: string, engine: Engine, holds: Binding[], o: { sources?: SourceRef[]; note?: string } = {}): Store =>
+  ({ kind: "store", name, engine, holds, ...o });
+
+export const table = (entityName: string, tableName: string, o: Omit<Binding, "entity" | "table"> = {}): Binding =>
+  ({ entity: entityName, table: tableName, ...o });
+
+export const idx = (...on: string[]): PhysicalIndex => ({ on });
+export const uniqueIdx = (...on: string[]): PhysicalIndex => ({ on, unique: true });
+
+// ---- endpoints ----
+// http("POST", "/orders", "Orders.PlaceOrder", { auth: "session" })
+export const http = (
+  method: NonNullable<Endpoint["method"]>, path: string, calls: string | string[],
+  o: { auth: string; audience?: Endpoint["audience"]; name?: string; sources?: SourceRef[]; note?: string },
+): Endpoint => ({
+  kind: "endpoint", protocol: "http", method, path, name: o.name ?? `${method} ${path}`,
+  calls: typeof calls === "string" ? [calls] : calls, auth: o.auth, audience: o.audience ?? "public", sources: o.sources, note: o.note,
+});
+
+// rpc("trpc", "recipient.rejectDocumentWithToken", "Signing.Reject", { auth: "recipient token" })
+export const rpc = (
+  protocol: Exclude<Endpoint["protocol"], "http">, path: string, calls: string | string[],
+  o: { auth: string; audience?: Endpoint["audience"]; name?: string; sources?: SourceRef[]; note?: string },
+): Endpoint => ({
+  kind: "endpoint", protocol, path, name: o.name ?? path,
+  calls: typeof calls === "string" ? [calls] : calls, auth: o.auth, audience: o.audience ?? "app", sources: o.sources, note: o.note,
 });

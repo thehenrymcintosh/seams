@@ -1,7 +1,8 @@
 // Rules that keep modules tidy. Each rule is something a reviewer would
 // otherwise have to catch by reading code.
 
-import type { Contract, Entity, Module, Plan, TypeExpr } from "./ast.ts";
+import type { Contract, Module, Plan, TypeExpr } from "./ast.ts";
+import { accessPatterns, RELATIONAL, templateFields } from "./storage.ts";
 import { walk } from "./walk.ts";
 
 export type Diagnostic = { level: "error" | "warning"; at: string; message: string };
@@ -143,9 +144,63 @@ export function check(plan: Plan): Diagnostic[] {
         }
         const missing = by.filter((f) => !target.fields.some((x) => x.name === f));
         if (missing.length) { err(at, `findBy ${meth.by.join(",")}: no field ${missing.join(", ")} on ${target.name}`); continue; }
-        if (!isIndexed(target, by)) {
-          warn(at, `findBy ${meth.by.join(",")} has no supporting index on ${target.name}`);
+      }
+    }
+
+    // Every lookup is served by a key or an index, physical when the table is
+    // bound to a store. A key-value store cannot query without one.
+    for (const a of accessPatterns(m)) {
+      if (a.servedBy || (a.label.startsWith("find") && !a.by.every((f) => m.entities.find((e) => e.name === a.entity)?.fields.some((x) => x.name === f)))) continue;
+      const at = `${m.name} / ${a.repository}`;
+      if (!a.store) warn(at, `${a.label.replace("find by ", "findBy ")} has no supporting index on ${a.entity}`);
+      else if (RELATIONAL.has(a.store.engine)) warn(at, `${a.label.replace("find by ", "findBy ")} has no index on table "${a.binding!.table}" in ${a.store.name}: a full table scan`);
+      else err(at, `${a.label.replace("find by ", "findBy ")} needs a scan of ${a.store.name}; add a secondary index keyed on ${a.by.join(" + ")}`);
+    }
+
+    // --- 1b. stores: each binds this module's own tables
+    const bound = new Set<string>();
+    for (const st of m.stores) {
+      for (const b of st.holds) {
+        const at = `${m.name} / store ${st.name} / ${b.table}`;
+        const e = m.entities.find((x) => x.name === b.entity);
+        if (!e) {
+          const owner = ix.entityOwner.get(b.entity);
+          err(at, owner ? `stores ${b.entity}, which ${owner.name} owns; a table lives in its owner's store` : `no entity "${b.entity}" in ${m.name}`);
+          continue;
         }
+        if (bound.has(b.entity)) err(at, `${b.entity} is bound to more than one table`);
+        bound.add(b.entity);
+        const fields = new Set(e.fields.map((f) => f.name));
+        const colToField = new Map((b.columns ?? []).map((c) => [c.column ?? c.field, c.field]));
+        for (const c of b.columns ?? []) if (!fields.has(c.field)) err(at, `column for unknown field "${c.field}"`);
+        for (const i of b.indexes ?? []) {
+          for (const on of i.on) if (!fields.has(colToField.get(on) ?? on)) err(at, `index on unknown column "${on}"`);
+        }
+        if (RELATIONAL.has(st.engine)) continue;
+        if (st.engine === "dynamodb" && !b.pk) { err(at, "a DynamoDB binding needs a partition key template (pk)"); continue; }
+        for (const tpl of [b.pk, b.sk, ...(b.gsis ?? []).flatMap((g) => [g.pk, g.sk])]) {
+          for (const f of tpl ? templateFields(tpl) : []) if (!fields.has(f)) err(at, `key template "${tpl}" names unknown field "${f}"`);
+        }
+        if (b.pk && st.engine === "dynamodb") {
+          const keyFields = [...templateFields(b.pk), ...(b.sk ? templateFields(b.sk) : [])];
+          const missing = e.key.filter((k) => !keyFields.includes(k));
+          if (missing.length) err(at, `the table key does not include ${missing.join(", ")}, so two ${e.name} items can collide`);
+        }
+        if (b.ttl && !fields.has(b.ttl)) err(at, `ttl field "${b.ttl}" does not exist`);
+      }
+    }
+
+    // --- 3b. endpoints: thin, and only onto contracts the module can reach
+    dupes(m.endpoints.map((x) => x.name), (n) => err(`${m.name} / endpoint ${n}`, "duplicate endpoint"));
+    for (const ep of m.endpoints) {
+      const at = `${m.name} / endpoint ${ep.name}`;
+      if (!ep.calls.length) err(at, "calls nothing; an endpoint exposes at least one operation");
+      for (const call of ep.calls) {
+        const [cname, op] = call.split(".");
+        const c = ix.contractByName.get(cname);
+        if (!c) { err(at, `unknown contract "${cname}"`); continue; }
+        if (!usedContracts.has(cname) && !m.provides.includes(c)) err(at, `calls ${call} without declaring a dependency on ${cname}`);
+        if (!c.operations.some((o) => o.name === op)) err(at, `contract ${cname} has no operation "${op}"`);
       }
     }
 
@@ -230,13 +285,6 @@ function memberLookup(by: string[]): string | null {
   const owners = new Set(by.map((f) => (f.includes(".") ? f.split(".")[0] : "")));
   return owners.size === 1 ? [...owners][0] : null;
 }
-
-function isIndexed(e: Entity, by: string[]): boolean {
-  const covers = (cols: string[]) => by.every((f, i) => cols[i] === f) || sameSet(cols, by);
-  return covers(e.key) || e.indexes.some((i) => covers(i.fields));
-}
-
-const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 function dupes(names: string[], report: (n: string) => void): void {
   const seen = new Set<string>();

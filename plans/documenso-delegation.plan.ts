@@ -4,8 +4,8 @@
 import type { Module } from "../src/ast.ts";
 import type { PlanDocument } from "../src/doc.ts";
 import {
-  aggregate, command, contract, entity, enumOf, event, findBy, get, module, plan, query, record, repo, save, src,
-  stub, subscribe, t,
+  aggregate, command, contract, entity, enumOf, event, findBy, get, http, idx, module, plan, query, record, repo, rpc, save,
+  src, store, stub, subscribe, t, table, uniqueIdx,
 } from "../src/dsl.ts";
 
 const lib = "packages/lib/server-only";
@@ -32,9 +32,12 @@ const auditTrail = module("AuditTrail", {
   entities: [
     entity("DocumentAuditLog", {
       id: t.string, envelopeId: t.optional(t.string), type: t.string, data: t.string, email: t.optional(t.string), createdAt: t.datetime,
-    }, { indexes: [{ fields: ["envelopeId"] }], doc: "type is a free-text column; the list of types lives in code, so adding one needs no migration." }),
+    }, { doc: "type is a free-text column; the list of types lives in code, so adding one needs no migration." }),
   ],
   repositories: [repo("DocumentAuditLog", [save, findBy("envelopeId")])],
+  stores: [store("main database", "postgres", [
+    table("DocumentAuditLog", "DocumentAuditLog", { indexes: [idx("envelopeId")], columns: [{ field: "data", type: "jsonb" }] }),
+  ], { note: "The same Postgres database as Envelopes; this module owns only its table." })],
   provides: [
     contract("AuditTrail", {
       types: [
@@ -55,7 +58,7 @@ const sealing = stub("Sealing", "Burns signatures into the PDF and signs it once
 const envelopeFields = {
   envelope: entity("Envelope", {
     id: t.string, teamId: t.int, userId: t.int, status: t.ref("EnvelopeStatus"), title: t.string, documentMetaId: t.string,
-  }, { indexes: [{ fields: ["teamId"] }, { fields: ["status"] }], sources: [src("packages/prisma/schema.prisma", "Envelope", 449)] }),
+  }, { sources: [src("packages/prisma/schema.prisma", "Envelope", 449)] }),
   meta: entity("DocumentMeta", {
     id: t.string, signingOrder: t.ref("SigningOrderMode"), allowDictateNextSigner: t.boolean, distributionMethod: t.string,
   }, { sources: [src("packages/prisma/schema.prisma", "DocumentMeta", 575)], doc: "Per-envelope settings. Team and organisation settings hold the defaults." }),
@@ -65,13 +68,33 @@ const envelopeFields = {
   },
   field: entity("Field", {
     id: t.int, envelopeId: t.string, recipientId: t.int, type: t.string, inserted: t.boolean,
-  }, { indexes: [{ fields: ["envelopeId"] }, { fields: ["recipientId"] }], sources: [src("packages/prisma/schema.prisma", "Field", 703)] }),
+  }, { sources: [src("packages/prisma/schema.prisma", "Field", 703)] }),
   signature: entity("Signature", {
     id: t.int, fieldId: t.int, recipientId: t.int, created: t.datetime,
-  }, { indexes: [{ fields: ["fieldId"], unique: true }, { fields: ["recipientId"] }], sources: [src("packages/prisma/schema.prisma", "Signature", 728)] }),
+  }, { sources: [src("packages/prisma/schema.prisma", "Signature", 728)] }),
 };
 
-const recipientIndexes = [{ fields: ["token"] }, { fields: ["envelopeId"] }, { fields: ["email"] }];
+// Prisma names tables after models and indexes "<Model>_<columns>_idx".
+const pidx = (t: string, ...on: string[]) => ({ ...idx(...on), name: `${t}_${on.join("_")}_idx` });
+const mainDb = () => store("main database", "postgres", [
+  table("Envelope", "Envelope", {
+    indexes: [pidx("Envelope", "teamId"), pidx("Envelope", "status"), pidx("Envelope", "userId")],
+    columns: [{ field: "status", type: '"DocumentStatus"' }],
+  }),
+  table("DocumentMeta", "DocumentMeta", { columns: [{ field: "signingOrder", type: '"DocumentSigningOrder"' }, { field: "distributionMethod", type: '"DocumentDistributionMethod"' }] }),
+  table("Recipient", "Recipient", {
+    indexes: [
+      pidx("Recipient", "token"), pidx("Recipient", "envelopeId"), pidx("Recipient", "email"), pidx("Recipient", "expiresAt"),
+      pidx("Recipient", "email", "signingStatus", "envelopeId", "role"),
+      { name: "Recipient_email_trgm_idx", on: ["email"], using: "gin" },
+    ],
+    columns: [{ field: "email", type: "varchar(255)" }, { field: "name", type: "varchar(255)" }],
+    note: "Eleven indexes in the schema; the ones lookups here rely on are listed.",
+  }),
+  table("Field", "Field", { indexes: [pidx("Field", "envelopeId"), pidx("Field", "recipientId")], columns: [{ field: "type", type: '"FieldType"' }] }),
+  table("Signature", "Signature", { indexes: [{ ...uniqueIdx("fieldId"), name: "Signature_fieldId_key" }, pidx("Signature", "recipientId")] }),
+], { sources: [src("packages/prisma/schema.prisma")], note: "One PostgreSQL database for the whole app, reached through Prisma and Kysely." });
+
 const recipientNote = "Recipient rows are written from 29 files in 10 folders, including the document flows, templates, jobs and admin (grep for prisma/tx.recipient writes). The plan treats Envelopes as their one owner.";
 
 const invariants = [
@@ -139,11 +162,12 @@ const envelopesV1 = module("Envelopes", {
   note: envelopesNote,
   entities: [
     envelopeFields.envelope, envelopeFields.meta,
-    entity("Recipient", envelopeFields.recipientShape, { indexes: recipientIndexes, sources: [src("packages/prisma/schema.prisma", "Recipient", 646)], note: recipientNote }),
+    entity("Recipient", envelopeFields.recipientShape, { sources: [src("packages/prisma/schema.prisma", "Recipient", 646)], note: recipientNote }),
     envelopeFields.field, envelopeFields.signature,
   ],
   aggregates: [aggregate("Envelope", ["DocumentMeta", "Recipient", "Field", "Signature"], invariants)],
   repositories: [repo("Envelope", [get, findBy("teamId"), findBy("Recipient.token"), save])],
+  stores: [mainDb()],
   modules: [signingOrder, auditTrail, sealing],
   uses: ["SigningOrder", "AuditTrail", "Sealing", "Accounts"],
   provides: [
@@ -178,6 +202,10 @@ const webhooks = (events: string[], on: string[]) => module("Webhooks", {
       { sources: [src("packages/prisma/schema.prisma", "WebhookCall", 204)] }),
   ],
   repositories: [repo("Webhook", [get, findBy("teamId"), save]), repo("WebhookCall", [findBy("webhookId"), save])],
+  stores: [store("main database", "postgres", [
+    table("Webhook", "Webhook", { columns: [{ field: "eventTriggers", type: '"WebhookTriggerEvents"[]' }] }),
+    table("WebhookCall", "WebhookCall", { columns: [{ field: "event", type: '"WebhookTriggerEvents"' }, { field: "status", type: '"WebhookCallStatus"' }] }),
+  ], { note: "Neither table declares an index besides its key." })],
   uses: [subscribe("Envelopes", ...on)],
   provides: [
     contract("Webhooks", {
@@ -200,8 +228,26 @@ const accounts = stub("Accounts", "Users, teams and organisations, their members
   ["Accounts"], [src(`${lib}/team/`), src(`${lib}/organisation/`), src(`${lib}/user/`)]);
 const templates = stub("Templates", "Reusable envelopes, direct links and bulk send. Creates envelopes from a template.",
   [], [src(`${lib}/template/`)], ["Envelopes"]);
-const api = stub("Api", "The tRPC routes (API v2 and the app) and the ts-rest API v1. Thin: validates input and calls the contracts.",
-  [], [src("packages/trpc/server/"), src("packages/api/v1/")], ["Envelopes", "Signing", "Webhooks", "Accounts"]);
+const v2 = (method: "GET" | "POST", path: string, calls: string, file: string) =>
+  http(method, `/api/v2${path}`, calls, { auth: "api token or session", audience: "public", sources: [src(`packages/trpc/server/envelope-router/${file}.types.ts`)] });
+const apiEndpoints = [
+  v2("GET", "/envelope/{envelopeId}", "Envelopes.GetEnvelope", "get-envelope"),
+  v2("POST", "/envelope/update", "Envelopes.UpdateSettings", "update-envelope"),
+  v2("POST", "/envelope/distribute", "Envelopes.Send", "distribute-envelope"),
+  v2("POST", "/envelope/cancel", "Envelopes.Cancel", "cancel-envelope"),
+  v2("GET", "/envelope/{envelopeId}/audit-log", "Envelopes.ListAuditLog", "find-envelope-audit-logs"),
+  http("POST", "/api/v1/documents/{id}/send", "Envelopes.Send", { auth: "api token", audience: "public", sources: [src("packages/api/v1/contract.ts", "sendDocument", 192)], note: "API v1 is deprecated but still served." }),
+  rpc("trpc", "recipient.completeDocumentWithToken", "Signing.Complete", { auth: "recipient token", sources: [src("packages/trpc/server/recipient-router/router.ts", "completeDocumentWithToken", 590)] }),
+  rpc("trpc", "recipient.rejectDocumentWithToken", "Signing.Reject", { auth: "recipient token", sources: [src("packages/trpc/server/recipient-router/router.ts", "rejectDocumentWithToken", 679)] }),
+  rpc("trpc", "webhook.createWebhook", "Webhooks.CreateWebhook", { auth: "session", sources: [src("packages/trpc/server/webhook-router/router.ts", "createWebhook", 54)] }),
+];
+const apiModule = (endpoints = apiEndpoints) => module("Api", {
+  purpose: "Every way in: the public API v2 (tRPC exposed as OpenAPI), the deprecated v1 REST API, and the app's own tRPC calls. Validates input and calls the contracts.",
+  sources: [src("packages/trpc/server/"), src("packages/api/v1/"), src("apps/remix/server/router.ts")],
+  note: "Rate limits and CSRF are applied per prefix in apps/remix/server/router.ts. Only the endpoints near the change are listed.",
+  uses: ["Envelopes", "Signing", "Webhooks", "Accounts"],
+  endpoints,
+});
 
 // --- The change: delegation ------------------------------------------------------
 
@@ -213,7 +259,7 @@ const envelopesV2: Module = module("Envelopes", {
     envelopeFields.envelope,
     { ...envelopeFields.meta, fields: [...envelopeFields.meta.fields, { name: "allowDelegation", type: t.optional(t.boolean) }] },
     entity("Recipient", { ...envelopeFields.recipientShape, delegatedFromId: t.optional(t.int) },
-      { indexes: recipientIndexes, sources: [src("packages/prisma/schema.prisma", "Recipient", 646)], note: recipientNote }),
+      { sources: [src("packages/prisma/schema.prisma", "Recipient", 646)], note: recipientNote }),
     envelopeFields.field, envelopeFields.signature,
   ],
   aggregates: [aggregate("Envelope", ["DocumentMeta", "Recipient", "Field", "Signature"], [
@@ -224,6 +270,7 @@ const envelopesV2: Module = module("Envelopes", {
     "Only a SIGNER or APPROVER who has not acted can delegate, and only when the envelope allows it.",
   ])],
   repositories: envelopesV1.repositories,
+  stores: [mainDb()],
   modules: [signingOrder, auditTrail, sealing],
   uses: envelopesV1.uses.map((u) => u.contract),
   provides: [
@@ -259,8 +306,9 @@ const doc: PlanDocument = {
   title: "Signer delegation",
   intent: "Let a signer hand their signing over to someone else (an assistant, a colleague with signing authority). The sender should be told, and the audit log and certificate should show who delegated to whom.",
   mode: "plan",
-  current: plan("documenso", [envelopesV1, emailsV1, webhooks(webhookEvents, webhookSubs), accounts, templates, api]),
-  proposed: plan("documenso", [envelopesV2, emailsV2, webhooks([...webhookEvents, "RECIPIENT_DELEGATED"], [...webhookSubs, "RecipientDelegated"]), accounts, templates, api]),
+  current: plan("documenso", [envelopesV1, emailsV1, webhooks(webhookEvents, webhookSubs), accounts, templates, apiModule()]),
+  proposed: plan("documenso", [envelopesV2, emailsV2, webhooks([...webhookEvents, "RECIPIENT_DELEGATED"], [...webhookSubs, "RecipientDelegated"]), accounts, templates,
+    apiModule([...apiEndpoints, rpc("trpc", "recipient.delegateDocumentWithToken", "Signing.Delegate", { auth: "recipient token" })])]),
   slices: [
     {
       name: "Delegation in the data",
@@ -271,7 +319,7 @@ const doc: PlanDocument = {
     {
       name: "A signer can delegate",
       goal: "Signing.Delegate creates the new recipient, moves the fields, kills the old token, writes the audit entry and emits RecipientDelegated. The delegate gets the usual signing request.",
-      nodes: ["Envelopes/contract/Signing/Delegate", "Envelopes/contract/Signing/type/DelegateTo", "Envelopes/contract/Envelopes/RecipientDelegated", "Envelopes/AuditTrail/contract/AuditTrail/type/AuditType", "Envelopes/aggregate/Envelope"],
+      nodes: ["Envelopes/contract/Signing/Delegate", "Envelopes/contract/Signing/type/DelegateTo", "Api/endpoint/recipient.delegateDocumentWithToken", "Envelopes/contract/Envelopes/RecipientDelegated", "Envelopes/AuditTrail/contract/AuditTrail/type/AuditType", "Envelopes/aggregate/Envelope"],
     },
     {
       name: "Everyone hears about it",
@@ -308,10 +356,26 @@ const doc: PlanDocument = {
       node: "Envelopes/contract/Signing",
     },
     {
+      text: "Delegation is a tRPC call from the signing page only, not a public API v2 endpoint.",
+      why: "Every other token-authorised action (complete, reject) is app-only too. A public endpoint would need its own auth story for API callers acting for a signer.",
+      node: "Api/endpoint/recipient.delegateDocumentWithToken",
+    },
+    {
       text: "Emails and Webhooks learn about delegation through a RecipientDelegated event, as they do for rejection.",
       why: "Envelopes should not know which emails exist. In code this is still a direct job trigger, the same as rejection today.",
       node: "Envelopes/contract/Envelopes/RecipientDelegated",
     },
+  ],
+  glossary: [
+    { term: "Envelope", meaning: "A document (or template) together with its files, recipients, fields and settings. The thing that gets sent.", node: "Envelopes/entity/Envelope" },
+    { term: "Recipient", meaning: "Anyone the envelope goes to. Their role says what they do: sign, approve, view, assist or just get a copy (CC).", node: "Envelopes/entity/Recipient" },
+    { term: "Token", meaning: "The secret in a recipient's signing link. It is their only credential: whoever has it can act as them.", node: "Envelopes/contract/Signing" },
+    { term: "Field", meaning: "A box placed on a page for one recipient to fill: signature, date, text, checkbox.", node: "Envelopes/entity/Field" },
+    { term: "Signing order", meaning: "PARALLEL lets everyone act at once; SEQUENTIAL makes recipients wait for their turn.", node: "Envelopes/SigningOrder" },
+    { term: "Dictate next signer", meaning: "An existing option where a signer types in who signs after them. It edits that next recipient in place.", node: "Envelopes/entity/DocumentMeta" },
+    { term: "Sealing", meaning: "Once everyone has acted, the signatures are burned into the PDF and the file is cryptographically signed.", node: "Envelopes/Sealing" },
+    { term: "Audit log", meaning: "Every action on an envelope, with who did it. It is printed into the signing certificate.", node: "Envelopes/AuditTrail" },
+    { term: "Distribute", meaning: "Sending a draft envelope out: it becomes PENDING and the first recipients get their links.", node: "Envelopes/contract/Envelopes/Send" },
   ],
   facts: {
     "Envelopes/entity/Recipient": [

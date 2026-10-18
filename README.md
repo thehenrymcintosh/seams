@@ -4,9 +4,11 @@ A first prototype of a planning representation that sits above code. A plan is
 a typed tree (an AST) holding only the decisions that matter at the module
 level, in the three categories:
 
-1. **Data**: how it is stored and accessed (entities, keys, indexes, repositories)
+1. **Data**: what is stored and how it is accessed (entities, aggregates, repositories), and the
+   physical stores that hold it (Postgres tables and indexes, DynamoDB keys and GSIs)
 2. **Module split**: which modules exist and who depends on whom
-3. **Contracts**: what each module promises the others (operations, errors, events, DTO types)
+3. **Contracts**: what each module promises the others (operations, errors, events, DTO types), and
+   the endpoints that expose them (HTTP routes, tRPC procedures) with their auth
 
 Nothing else goes in the plan. Function bodies, frameworks and infrastructure
 stay in code. Every other format (diagram, spec, code skeleton, change review)
@@ -20,6 +22,7 @@ right view can be picked per context.
 | `src/ast.ts` | The node types. Start here. |
 | `src/dsl.ts` | Small helpers so a plan reads like a spec. Plans stay plain data. |
 | `src/check.ts` | The rules that keep modules tidy. |
+| `src/storage.ts` | Which key or index serves each access pattern, per store engine. |
 | `src/views/mermaid.ts` | Diagram view: system graph and per-module ER diagrams. |
 | `src/views/spec.ts` | Text view: a reviewable Markdown spec. |
 | `src/views/skeleton.ts` | Code view: a TypeScript skeleton that typechecks. |
@@ -49,7 +52,9 @@ npm install && npm run typecheck   # typechecks the prototype and the generated 
 A plan document is one HTML file that opens in any browser and makes no network requests.
 It carries the plan three ways:
 
-- **For people:** one pannable, zoomable canvas. Modules are cards placed as a graph (springs
+- **For people:** a briefing first (the ask, what the change costs as clickable counts, questions
+  waiting on you, the phases in order, and the domain's own words with hover definitions), then one
+  pannable, zoomable canvas. Modules are cards placed as a graph (springs
   along calls, events and shared types; cards never overlap; drag one and it stays put).
   Everything starts collapsed. Contracts and stored tables are rows that expand in place; types open as cards under the contract that defines them and wire back to every use
   in other modules. Changes are shown on the node they affect, and new dependencies are drawn as
@@ -90,6 +95,22 @@ rather than queries, so the plan knows every way a module touches its data.
   carried into the generated types as comments. A root can be found through a member's indexed
   field: `findBy("Recipient.token")` loads the envelope a signing token belongs to.
 
+## Storage and endpoints
+
+Entities say what is stored; a **store** says where and how. Each binding maps an entity to a
+table (`table("Recipient", "Recipient", { indexes: [idx("token")] })`) or, for DynamoDB, to key
+templates (`pk: "PAY#{id}"`, `gsis: [{ name: "byOrder", pk: "ORDER#{orderId}" }]`). Columns are
+derived from the entity's fields, so a binding lists only overrides. Every access pattern is then
+checked against the physical keys: a Postgres lookup with no index is a warning (a full table
+scan), a DynamoDB lookup with no key or GSI is an error. The page shows, under each index, which
+lookups it serves.
+
+An **endpoint** (`http("POST", "/orders", "Orders.PlaceOrder", { auth: "session" })` or
+`rpc("trpc", "recipient.rejectDocumentWithToken", "Signing.Reject", …)`) belongs to a module and
+may only call operations of contracts that module uses or provides. Removing one or changing its
+auth is a breaking change. The skeleton emits `routes.ts`, which binds each endpoint to the
+contract method so the compiler checks it, plus `<store>.sql` DDL and `<store>.keys.ts` key builders.
+
 ## What the checker enforces
 
 Run on `examples/shop.tangled.ts` (output in `out/tangled-check.txt`):
@@ -109,7 +130,9 @@ The full list: references resolve; one owner per entity; repositories only
 touch their own module's entities; every `findBy` is backed by the key or an
 index; contracts never expose storage entities; cross-module types need a
 declared dependency; subscribed events exist; no dependency cycles; a module
-that owns data provides some contract; a contract appears once in `uses`.
+that owns data provides some contract; a contract appears once in `uses`; a store only
+holds its own module's tables, and its indexes and key templates name real fields; every lookup
+is served by a key or index; endpoints only call operations they can reach.
 
 The change view also tags a value added to an enum that a table stores as a
 `migration`, since a database enum has to be altered first.

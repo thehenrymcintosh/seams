@@ -2,10 +2,12 @@ error   Orders / uses Gateway
         reaches inside Payments: Gateway is internal to it; use a contract Payments provides instead
 error   Orders / OrderLineRepository
         OrderLine is inside the Order aggregate; load and save it through Order's repository
-warning Payments / PaymentRepository
-        findBy orderId has no supporting index on Payment
+error   Orders / endpoint GET /orders/{id}/payment
+        contract Payments has no operation "GetStatus"
 error   Payments / OrderRepository
         reaches into storage owned by Orders; go through the Orders module's contract instead
+warning Payments / PaymentRepository
+        findBy orderId has no supporting index on Payment
 error   Payments / contract Payments / StartPayment -> output
         exposes storage entity "Order"; define a contract type instead
 error   Orders -> Payments -> Orders

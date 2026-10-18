@@ -11,6 +11,7 @@ import type { PlanDocument } from "../doc.ts";
 import { ids } from "../ids.ts";
 import { walk } from "../walk.ts";
 import { diff, type Change } from "../views/diff.ts";
+import { accessPatterns, indexName, RELATIONAL, sqlType } from "../storage.ts";
 
 export type Tok = { s: string; ref?: string };
 export type FieldView = { name: string; type: Tok[] };
@@ -32,7 +33,42 @@ export type ModuleView = {
   contracts: ContractView[];
   aggregates: AggregateView[];
   entities: EntityView[];
+  stores: StoreView[];
+  endpoints: EndpointView[];
   modules: ModuleView[];           // sub-modules, drawn inside this card
+};
+
+export type StoreView = { id: string; name: string; engine: string; note?: string; sources: string[]; tables: TableView[] };
+
+// A physical table, with every lookup the module makes on it attached to the
+// key or index that serves it. Lookups nothing serves are listed as scans.
+export type TableView = {
+  id: string;
+  entity: string;                  // entity id
+  entityName: string;
+  table: string;
+  relational: boolean;
+  columns: { name: string; type: string; nullable: boolean; key: boolean }[];
+  indexes: { name: string; on: string[]; unique: boolean; using?: string; serves: string[] }[];
+  pk?: string;
+  sk?: string;
+  gsis: { name: string; pk: string; sk?: string; serves: string[] }[];
+  ttl?: string;
+  keyServes: string[];
+  scans: string[];
+};
+
+export type EndpointView = {
+  id: string;
+  name: string;
+  protocol: string;
+  method?: string;
+  path: string;
+  auth: string;
+  audience: string;
+  note?: string;
+  sources: string[];
+  calls: { label: string; ref?: string }[];
 };
 
 export type AggregateView = { id: string; name: string; root: string; members: string[]; invariants: string[] };
@@ -63,9 +99,10 @@ export type EntityView = {
   fields: (FieldView & { key: boolean })[];
   indexes: string[];
   access: string[];
+  stored?: { id: string; table: string; store: string; engine: string };
 };
 
-export type EdgeView = { from: string; to: string; kind: "call" | "event"; label?: string };
+export type EdgeView = { from: string; to: string; kind: "call" | "event" | "route"; label?: string };
 
 export type DocumentView = {
   current: TreeView;
@@ -115,6 +152,18 @@ function treeView(plan: Plan): TreeView {
         fields: e.fields.map((f) => ({ ...fieldView(f, resolve(null)), key: e.key.includes(f.name) })),
         indexes: e.indexes.map((i) => `${i.fields.join(", ")}${i.unique ? " (unique)" : ""}`),
         access: m.repositories.filter((r) => r.entity === e.name).flatMap((r) => r.methods.map(accessLabel)),
+        stored: storedAt(m, path, e.name),
+      })),
+      stores: storeViews(m, path),
+      endpoints: m.endpoints.map((ep) => ({
+        id: ids.endpoint(path, ep.name),
+        name: ep.name, protocol: ep.protocol, method: ep.method, path: ep.path, auth: ep.auth, audience: ep.audience,
+        note: ep.note, sources: sources(ep.sources),
+        calls: ep.calls.map((c) => {
+          const [cn, op] = c.split(".");
+          const o = owner.get(cn);
+          return { label: c, ref: o ? ids.operation(o, cn, op) : undefined };
+        }),
       })),
       modules: m.modules.map((sub) => moduleView(sub, `${path}/${sub.name}`)),
     };
@@ -123,6 +172,13 @@ function treeView(plan: Plan): TreeView {
 
   const edges: EdgeView[] = [];
   for (const { module: m, path } of placed) {
+    for (const ep of m.endpoints) {
+      for (const c of ep.calls) {
+        const [cn, op] = c.split(".");
+        const o = owner.get(cn);
+        if (o) edges.push({ from: ids.endpoint(path, ep.name), to: ids.operation(o, cn, op), kind: "route" });
+      }
+    }
     for (const u of m.uses) {
       const o = owner.get(u.contract);
       if (!o) continue;
@@ -194,6 +250,50 @@ function toks(t: TypeExpr, r: (name: string) => string | undefined): Tok[] {
     case "list": return [...toks(t.of, r), { s: "[]" }];
     case "optional": return [...toks(t.of, r), { s: "?" }];
   }
+}
+
+function storedAt(m: Module, path: string, entity: string): EntityView["stored"] {
+  for (const st of m.stores) {
+    const b = st.holds.find((x) => x.entity === entity);
+    if (b) return { id: ids.binding(path, st.name, entity), table: b.table, store: st.name, engine: st.engine };
+  }
+  return undefined;
+}
+
+function storeViews(m: Module, path: string): StoreView[] {
+  const access = accessPatterns(m);
+  const enums = new Set(m.provides.flatMap((c) => c.types.filter((t) => t.kind === "enum").map((t) => t.name)));
+  return m.stores.map((st) => ({
+    id: ids.store(path, st.name),
+    name: st.name,
+    engine: st.engine,
+    note: st.note,
+    sources: sources(st.sources),
+    tables: st.holds.map((b) => {
+      const e = m.entities.find((x) => x.name === b.entity);
+      const mine = access.filter((a) => a.binding === b);
+      const label = (a: (typeof mine)[number]) => `${a.repository.replace(/Repository$/, "")}: ${a.label}`;
+      const served = (name: string) => mine.filter((a) => a.servedBy === name).map(label);
+      const relational = RELATIONAL.has(st.engine);
+      return {
+        id: ids.binding(path, st.name, b.entity),
+        entity: ids.entity(path, b.entity),
+        entityName: b.entity,
+        table: b.table,
+        relational,
+        columns: relational && e ? e.fields.map((f) => {
+          const o = b.columns?.find((c) => c.field === f.name);
+          const d = sqlType(f.type, enums);
+          return { name: o?.column ?? f.name, type: o?.type ?? d.type, nullable: o?.nullable ?? d.nullable, key: e.key.includes(f.name) };
+        }) : [],
+        indexes: (b.indexes ?? []).map((i) => ({ name: indexName(b, i), on: i.on, unique: !!i.unique, using: i.using, serves: served(indexName(b, i)) })),
+        pk: b.pk, sk: b.sk, ttl: b.ttl,
+        gsis: (b.gsis ?? []).map((g) => ({ ...g, serves: served(g.name) })),
+        keyServes: [...served("primary key"), ...served("table key")],
+        scans: mine.filter((a) => !a.servedBy).map(label),
+      };
+    }),
+  }));
 }
 
 const sources = (s: Module["sources"]) =>

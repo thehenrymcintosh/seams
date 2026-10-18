@@ -75,6 +75,44 @@ export function diff(before: Plan, after: Plan): Change[] {
         for (const s of rb.methods.map(sig)) if (!sa.has(s)) push(mod, "internal", `${rb.name}: new access path ${s}`);
       }
 
+      // 1b. physical storage
+      const stores = match(a.stores ?? [], b.stores ?? []);
+      for (const st of stores.added) push(mod, "migration", `new ${st.engine} store ${st.name}`, undefined, ids.store(mod, st.name), `new ${st.engine} store`);
+      for (const st of stores.removed) push(mod, "migration", `store ${st.name} removed`, undefined, ids.module(mod), `store ${st.name} removed`);
+      for (const [sa, sb] of stores.both) {
+        const sid = ids.store(mod, sb.name);
+        if (sa.engine !== sb.engine) push(mod, "migration", `${sb.name}: moves from ${sa.engine} to ${sb.engine}`, undefined, sid, `moves from ${sa.engine} to ${sb.engine}`);
+        const bs = match(sa.holds.map((x) => ({ ...x, name: x.entity })), sb.holds.map((x) => ({ ...x, name: x.entity })));
+        for (const x of bs.added) push(mod, "migration", `${sb.name}: new table ${x.table}`, undefined, ids.binding(mod, sb.name, x.entity), `new table ${x.table}`);
+        for (const x of bs.removed) push(mod, "migration", `${sb.name}: drop table ${x.table}`, undefined, sid, `drop table ${x.table}`);
+        for (const [xa, xb] of bs.both) {
+          const bid = ids.binding(mod, sb.name, xb.entity);
+          const at = (short: string) => push(mod, "migration", `${xb.table}: ${short}`, undefined, bid, short);
+          if (xa.table !== xb.table) at(`renamed from ${xa.table}`);
+          const ia = new Set((xa.indexes ?? []).map((i) => i.on.join(", "))), ib = new Set((xb.indexes ?? []).map((i) => i.on.join(", ")));
+          for (const i of ib) if (!ia.has(i)) at(`add index (${i})`);
+          for (const i of ia) if (!ib.has(i)) at(`drop index (${i})`);
+          if (xa.pk !== xb.pk || xa.sk !== xb.sk) at(`re-key every item: ${xb.pk}${xb.sk ? ` / ${xb.sk}` : ""}`);
+          const ga = new Set((xa.gsis ?? []).map((g) => g.name));
+          for (const g of xb.gsis ?? []) if (!ga.has(g.name)) at(`new index ${g.name} (backfills existing items)`);
+          for (const g of xa.gsis ?? []) if (!(xb.gsis ?? []).some((x) => x.name === g.name)) at(`drop index ${g.name}`);
+          for (const c of xb.columns ?? []) {
+            const prev = (xa.columns ?? []).find((y) => y.field === c.field);
+            if (prev && prev.type !== c.type && c.type) at(`${c.column ?? c.field}: ${prev.type ?? "default"} → ${c.type}`);
+          }
+        }
+      }
+
+      // 3b. endpoints: removing or tightening one breaks its callers
+      const eps = match(a.endpoints ?? [], b.endpoints ?? []);
+      for (const e of eps.added) push(mod, "additive", `new endpoint ${e.name}`, undefined, ids.endpoint(mod, e.name), "new endpoint");
+      for (const e of eps.removed) push(mod, "breaking", `endpoint ${e.name} removed`, undefined, ids.module(mod), `endpoint ${e.name} removed`);
+      for (const [ea, eb] of eps.both) {
+        const eid = ids.endpoint(mod, eb.name);
+        if (ea.auth !== eb.auth) push(mod, "breaking", `${eb.name}: auth ${ea.auth} → ${eb.auth}`, undefined, eid, `auth ${ea.auth} → ${eb.auth}`);
+        if (ea.calls.join() !== eb.calls.join()) push(mod, "internal", `${eb.name}: now calls ${eb.calls.join(", ")}`, undefined, eid, `now calls ${eb.calls.join(", ")}`);
+      }
+
       // 2. module split
       const ua = new Set(a.uses.map((u) => u.contract)), ub = new Set(b.uses.map((u) => u.contract));
       for (const u of b.uses) {

@@ -15,6 +15,7 @@
 import type { Contract, Field, Module, Plan, TypeExpr } from "../ast.ts";
 import type { PlanDocument } from "../doc.ts";
 import { ids } from "../ids.ts";
+import { accessPatterns } from "../storage.ts";
 import { diff } from "./diff.ts";
 
 export function outline(doc: PlanDocument): string {
@@ -32,6 +33,9 @@ export function outline(doc: PlanDocument): string {
   out.push("# - a sub-module (indented module) is internal to its parent: only the parent and its siblings may use its contract");
   out.push("# - an aggregate is loaded and saved whole through its root; its other tables have no repository of their own,");
   out.push("#   and the invariants listed under it hold whenever it is saved");
+  out.push("# - a store lists the physical tables a module owns; each `served by` is the key or index a lookup must use,");
+  out.push("#   and `SCAN` marks a lookup with none");
+  out.push("# - an endpoint only parses, authorises (`auth`) and calls the operations after `->`; no logic of its own");
   out.push("# - [stub] modules are named only; their insides are not specified");
   out.push("");
   out.push(...planLines(target));
@@ -52,6 +56,10 @@ export function outline(doc: PlanDocument): string {
   if (doc.decisions.length) {
     out.push("", "decisions:");
     for (const d of doc.decisions) out.push(`  ${d.node ? `[${d.node}] ` : ""}${d.text} (because: ${d.why})`);
+  }
+  if (doc.glossary?.length) {
+    out.push("", "glossary:");
+    for (const g of doc.glossary) out.push(`  ${g.term}${g.node ? ` [${g.node}]` : ""}: ${g.meaning}`);
   }
   if (doc.questions.length) {
     out.push("", "open questions:");
@@ -77,10 +85,25 @@ function planLines(plan: Plan): string[] {
       const access = m.repositories.filter((r) => r.entity === e.name)
         .flatMap((r) => r.methods.map((x) => (x.kind === "find" ? `find(${x.by.join("+")})` : x.kind)));
       const idx = e.indexes.map((i) => `${i.unique ? "unique " : ""}(${i.fields.join("+")})`);
-      out.push(`${p}table [${ids.entity(path, e.name)}] { ${fields(e.fields)} } key(${e.key.join("+")})` +
+      out.push(`${p}entity [${ids.entity(path, e.name)}] { ${fields(e.fields)} } key(${e.key.join("+")})` +
         `${idx.length ? ` index ${idx.join(" ")}` : ""}${access.length ? ` access ${access.join(" ")}` : ""}`);
     }
+    for (const st of m.stores) {
+      out.push(`${p}store [${ids.store(path, st.name)}] ${st.engine}`);
+      for (const b of st.holds) {
+        const key = b.pk ? ` pk "${b.pk}"${b.sk ? ` sk "${b.sk}"` : ""}${(b.gsis ?? []).map((g) => ` ${g.name}(pk "${g.pk}"${g.sk ? ` sk "${g.sk}"` : ""})`).join("")}` : "";
+        const idx = (b.indexes ?? []).map((i) => `${i.unique ? "unique " : ""}${i.using ? `${i.using} ` : ""}(${i.on.join("+")})`);
+        const cols = (b.columns ?? []).filter((c) => c.type || c.column).map((c) => `${c.column ?? c.field} ${c.type ?? ""}`.trim());
+        out.push(`${p}  table [${ids.binding(path, st.name, b.entity)}] "${b.table}" holds ${b.entity}${key}` +
+          `${idx.length ? ` index ${idx.join(" ")}` : ""}${cols.length ? ` columns ${cols.join(", ")}` : ""}${b.ttl ? ` ttl ${b.ttl}` : ""}`);
+      }
+    }
+    const access = accessPatterns(m).filter((a) => a.store);
+    if (access.length) out.push(`${p}served by: ${access.map((a) => `${a.repository.replace(/Repository$/, "")} ${a.label} -> ${a.servedBy ?? "SCAN"}`).join("; ")}`);
     for (const c of m.provides) out.push(...contractLines(m, path, c, p));
+    for (const ep of m.endpoints) {
+      out.push(`${p}endpoint [${ids.endpoint(path, ep.name)}] ${ep.protocol}${ep.method ? ` ${ep.method}` : ""} ${ep.path} auth(${ep.audience}, ${ep.auth}) -> ${ep.calls.join(", ")}`);
+    }
     for (const sub of m.modules) visit(sub, `${path}/${sub.name}`, p);
   };
   for (const m of plan.modules) visit(m, m.name, "");

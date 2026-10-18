@@ -56,13 +56,7 @@
             "key": [
               "id"
             ],
-            "indexes": [
-              {
-                "fields": [
-                  "customerId"
-                ]
-              }
-            ]
+            "indexes": []
           },
           {
             "kind": "entity",
@@ -108,13 +102,7 @@
             "key": [
               "id"
             ],
-            "indexes": [
-              {
-                "fields": [
-                  "orderId"
-                ]
-              }
-            ]
+            "indexes": []
           }
         ],
         "aggregates": [
@@ -380,6 +368,93 @@
             "subscribes": []
           }
         ],
+        "stores": [
+          {
+            "kind": "store",
+            "name": "orders db",
+            "engine": "postgres",
+            "holds": [
+              {
+                "entity": "Order",
+                "table": "orders",
+                "indexes": [
+                  {
+                    "on": [
+                      "customerId"
+                    ]
+                  }
+                ],
+                "columns": [
+                  {
+                    "field": "total",
+                    "type": "numeric(12,2)"
+                  }
+                ]
+              },
+              {
+                "entity": "OrderLine",
+                "table": "order_lines",
+                "indexes": [
+                  {
+                    "on": [
+                      "orderId"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "endpoints": [
+          {
+            "kind": "endpoint",
+            "protocol": "http",
+            "method": "POST",
+            "path": "/orders",
+            "name": "POST /orders",
+            "calls": [
+              "Orders.PlaceOrder"
+            ],
+            "auth": "customer session",
+            "audience": "public"
+          },
+          {
+            "kind": "endpoint",
+            "protocol": "http",
+            "method": "GET",
+            "path": "/orders/{id}",
+            "name": "GET /orders/{id}",
+            "calls": [
+              "Orders.GetOrder"
+            ],
+            "auth": "customer session",
+            "audience": "public"
+          },
+          {
+            "kind": "endpoint",
+            "protocol": "http",
+            "method": "POST",
+            "path": "/orders/{id}/cancel",
+            "name": "POST /orders/{id}/cancel",
+            "calls": [
+              "Orders.CancelOrder"
+            ],
+            "auth": "customer session",
+            "audience": "public"
+          },
+          {
+            "kind": "endpoint",
+            "protocol": "http",
+            "method": "GET",
+            "path": "/customers/{customerId}/orders",
+            "name": "GET /customers/{customerId}/orders",
+            "calls": [
+              "Orders.ListForCustomer"
+            ],
+            "auth": "customer session",
+            "audience": "public"
+          }
+        ],
         "modules": []
       },
       {
@@ -431,19 +506,7 @@
             "key": [
               "id"
             ],
-            "indexes": [
-              {
-                "fields": [
-                  "sku"
-                ],
-                "unique": true
-              },
-              {
-                "fields": [
-                  "active"
-                ]
-              }
-            ]
+            "indexes": []
           }
         ],
         "aggregates": [],
@@ -569,6 +632,33 @@
           }
         ],
         "uses": [],
+        "stores": [
+          {
+            "kind": "store",
+            "name": "catalog db",
+            "engine": "postgres",
+            "holds": [
+              {
+                "entity": "Product",
+                "table": "products",
+                "indexes": [
+                  {
+                    "on": [
+                      "sku"
+                    ],
+                    "unique": true
+                  },
+                  {
+                    "on": [
+                      "active"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "endpoints": [],
         "modules": []
       },
       {
@@ -594,6 +684,8 @@
           }
         ],
         "uses": [],
+        "stores": [],
+        "endpoints": [],
         "modules": []
       },
       {
@@ -618,6 +710,8 @@
             ]
           }
         ],
+        "stores": [],
+        "endpoints": [],
         "modules": []
       }
     ]
@@ -685,13 +779,7 @@
             "key": [
               "id"
             ],
-            "indexes": [
-              {
-                "fields": [
-                  "customerId"
-                ]
-              }
-            ]
+            "indexes": []
           },
           {
             "kind": "entity",
@@ -737,13 +825,7 @@
             "key": [
               "id"
             ],
-            "indexes": [
-              {
-                "fields": [
-                  "orderId"
-                ]
-              }
-            ]
+            "indexes": []
           }
         ],
         "aggregates": [
@@ -1033,6 +1115,105 @@
             "subscribes": []
           }
         ],
+        "stores": [
+          {
+            "kind": "store",
+            "name": "orders db",
+            "engine": "postgres",
+            "holds": [
+              {
+                "entity": "Order",
+                "table": "orders",
+                "indexes": [
+                  {
+                    "on": [
+                      "customerId"
+                    ]
+                  }
+                ],
+                "columns": [
+                  {
+                    "field": "total",
+                    "type": "numeric(12,2)"
+                  }
+                ]
+              },
+              {
+                "entity": "OrderLine",
+                "table": "order_lines",
+                "indexes": [
+                  {
+                    "on": [
+                      "orderId"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "endpoints": [
+          {
+            "kind": "endpoint",
+            "protocol": "http",
+            "method": "POST",
+            "path": "/orders",
+            "name": "POST /orders",
+            "calls": [
+              "Orders.PlaceOrder"
+            ],
+            "auth": "customer session",
+            "audience": "public"
+          },
+          {
+            "kind": "endpoint",
+            "protocol": "http",
+            "method": "GET",
+            "path": "/orders/{id}",
+            "name": "GET /orders/{id}",
+            "calls": [
+              "Orders.GetOrder"
+            ],
+            "auth": "customer session",
+            "audience": "public"
+          },
+          {
+            "kind": "endpoint",
+            "protocol": "http",
+            "method": "POST",
+            "path": "/orders/{id}/cancel",
+            "name": "POST /orders/{id}/cancel",
+            "calls": [
+              "Orders.CancelOrder"
+            ],
+            "auth": "customer session",
+            "audience": "public"
+          },
+          {
+            "kind": "endpoint",
+            "protocol": "http",
+            "method": "GET",
+            "path": "/customers/{customerId}/orders",
+            "name": "GET /customers/{customerId}/orders",
+            "calls": [
+              "Orders.ListForCustomer"
+            ],
+            "auth": "customer session",
+            "audience": "public"
+          },
+          {
+            "kind": "endpoint",
+            "protocol": "http",
+            "method": "GET",
+            "path": "/orders/{id}/payment",
+            "name": "GET /orders/{id}/payment",
+            "calls": [
+              "Payments.GetStatus"
+            ],
+            "auth": "customer session",
+            "audience": "public"
+          }
+        ],
         "modules": []
       },
       {
@@ -1084,19 +1265,7 @@
             "key": [
               "id"
             ],
-            "indexes": [
-              {
-                "fields": [
-                  "sku"
-                ],
-                "unique": true
-              },
-              {
-                "fields": [
-                  "active"
-                ]
-              }
-            ]
+            "indexes": []
           }
         ],
         "aggregates": [],
@@ -1222,6 +1391,33 @@
           }
         ],
         "uses": [],
+        "stores": [
+          {
+            "kind": "store",
+            "name": "catalog db",
+            "engine": "postgres",
+            "holds": [
+              {
+                "entity": "Product",
+                "table": "products",
+                "indexes": [
+                  {
+                    "on": [
+                      "sku"
+                    ],
+                    "unique": true
+                  },
+                  {
+                    "on": [
+                      "active"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "endpoints": [],
         "modules": []
       },
       {
@@ -1283,13 +1479,7 @@
             "key": [
               "id"
             ],
-            "indexes": [
-              {
-                "fields": [
-                  "orderId"
-                ]
-              }
-            ]
+            "indexes": []
           }
         ],
         "aggregates": [],
@@ -1430,6 +1620,29 @@
             "subscribes": []
           }
         ],
+        "stores": [
+          {
+            "kind": "store",
+            "name": "payments table",
+            "engine": "dynamodb",
+            "holds": [
+              {
+                "entity": "Payment",
+                "table": "payments",
+                "pk": "PAY#{id}",
+                "gsis": [
+                  {
+                    "name": "byOrder",
+                    "pk": "ORDER#{orderId}",
+                    "sk": "AT#{createdAt}"
+                  }
+                ]
+              }
+            ],
+            "note": "Single-table design: one item per payment, found by order through the byOrder index."
+          }
+        ],
+        "endpoints": [],
         "modules": [
           {
             "kind": "module",
@@ -1479,6 +1692,8 @@
               }
             ],
             "uses": [],
+            "stores": [],
+            "endpoints": [],
             "modules": []
           }
         ]
@@ -1506,6 +1721,8 @@
           }
         ],
         "uses": [],
+        "stores": [],
+        "endpoints": [],
         "modules": []
       },
       {
@@ -1530,6 +1747,8 @@
             ]
           }
         ],
+        "stores": [],
+        "endpoints": [],
         "modules": []
       }
     ]

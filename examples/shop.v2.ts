@@ -2,9 +2,10 @@
 // through a new Payments module. Diff this against v1 to review the change.
 
 import {
-  aggregate, command, contract, entity, enumOf, event, findBy, get, module, plan, query, record, repo, save, subscribe, t,
+  aggregate, command, contract, entity, enumOf, event, findBy, get, http, module, plan, query, record, repo, save, store,
+  subscribe, t, table,
 } from "../src/dsl.ts";
-import { catalog } from "./shop.v1.ts";
+import { catalog, orderEndpoints, ordersStore } from "./shop.v1.ts";
 
 export const payments = module("Payments", {
   purpose: "Collects money for an order and reports the outcome. Knows nothing about what was bought.",
@@ -12,9 +13,12 @@ export const payments = module("Payments", {
     entity("Payment", {
       id: t.uuid, orderId: t.uuid, amount: t.decimal, status: t.ref("PaymentStatus"),
       providerRef: t.optional(t.string), createdAt: t.datetime,
-    }, { indexes: [{ fields: ["orderId"] }] }),
+    }),
   ],
   repositories: [repo("Payment", [get, findBy("orderId"), save])],
+  stores: [store("payments table", "dynamodb", [
+    table("Payment", "payments", { pk: "PAY#{id}", gsis: [{ name: "byOrder", pk: "ORDER#{orderId}", sk: "AT#{createdAt}" }] }),
+  ], { note: "Single-table design: one item per payment, found by order through the byOrder index." })],
   modules: [
     module("Gateway", {
       purpose: "Talks to the card provider. One implementation per provider; nothing outside Payments sees it.",
@@ -47,10 +51,10 @@ export const orders = module("Orders", {
     entity("Order", {
       id: t.uuid, customerId: t.uuid, status: t.ref("OrderStatus"), total: t.decimal, placedAt: t.datetime,
       paymentId: t.optional(t.uuid),
-    }, { indexes: [{ fields: ["customerId"] }] }),
+    }),
     entity("OrderLine", {
       id: t.uuid, orderId: t.uuid, productId: t.uuid, quantity: t.int, unitPrice: t.decimal,
-    }, { indexes: [{ fields: ["orderId"] }], doc: "Price is copied at order time; Catalog prices may change later." }),
+    }, { doc: "Price is copied at order time; Catalog prices may change later." }),
   ],
   aggregates: [aggregate("Order", ["OrderLine"], ["Total equals the sum of its lines.", "Lines cannot change once the order is placed.", "Status only moves forward: AwaitingPayment, then Paid or PaymentFailed."])],
   repositories: [repo("Order", [get, findBy("customerId"), save])],
@@ -78,6 +82,8 @@ export const orders = module("Orders", {
     }),
   ],
   uses: ["Catalog", subscribe("Payments", "PaymentCaptured", "PaymentFailed")],
+  stores: [ordersStore()],
+  endpoints: [...orderEndpoints, http("GET", "/orders/{id}/payment", "Payments.GetStatus", { auth: "customer session" })],
 });
 
 export default plan("shop v2", [catalog, orders, payments]);

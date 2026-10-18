@@ -6,223 +6,445 @@
 <meta name="generator" content="plan-ast">
 <title>Take payment at checkout</title>
 <style>
+/* Colour carries two separate meanings and they never share a hue:
+   - kind (what a thing is): endpoint cyan, contract indigo, event pink,
+     type violet, data slate, storage teal-blue; shown as icon tint, labels
+     and thin rules
+   - cost of a change: breaking red, migration amber, additive green; shown
+     as filled pills, bars and card borders
+   Everything else stays neutral, so colour always means something. */
 :root {
-  --bg: #f6f6f3;
+  --bg: #f5f5f2;
   --surface: #ffffff;
-  --surface-2: #f0efeb;
-  --text: #1d1d1b;
-  --muted: #6b6a66;
-  --border: #dcdad4;
+  --surface-2: #f0efea;
+  --surface-3: #e7e5df;
+  --text: #1b1b19;
+  --muted: #64635e;
+  --faint: #8f8d86;
+  --border: #dddbd4;
   --accent: #2f5bd3;
   --accent-soft: rgba(47, 91, 211, 0.12);
-  --type: #7a4fd0;
-  --type-soft: rgba(122, 79, 208, 0.12);
-  --breaking: #c4352b;
-  --migration: #b26b00;
-  --additive: #23843f;
-  --breaking-bg: #fbe9e7;
-  --migration-bg: #fdf1dc;
-  --additive-bg: #e5f4e8;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --k-endpoint: #0b7285;
+  --k-contract: #3b5bdb;
+  --k-event: #c2255c;
+  --k-type: #7048c8;
+  --k-data: #5c6b7a;
+  --k-storage: #1c6e8c;
+  --k-inside: #6b6a66;
+  --type: var(--k-type);
+  --type-soft: rgba(112, 72, 200, 0.12);
+
+  --breaking: #c92a2a;
+  --migration: #b35c00;
+  --additive: #2b8a3e;
+  --breaking-bg: #fde8e8;
+  --migration-bg: #fff0db;
+  --additive-bg: #e3f5e6;
+  --ask: #6741d9;
+  --ask-bg: #f0ebff;
+
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 14px rgba(0, 0, 0, 0.05);
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #151514;
-    --surface: #1e1e1c;
-    --surface-2: #292926;
-    --text: #ecebe7;
-    --muted: #a3a29c;
-    --border: #3a3a36;
-    --accent: #7c9cff;
-    --accent-soft: rgba(124, 156, 255, 0.16);
-    --type: #b69cff;
-    --type-soft: rgba(182, 156, 255, 0.16);
-    --breaking: #ff7b6e;
-    --migration: #f0b44c;
-    --additive: #5fcf7e;
-    --breaking-bg: #3b1f1c;
-    --migration-bg: #3a2c12;
-    --additive-bg: #1a3322;
+    --bg: #131312;
+    --surface: #1c1c1a;
+    --surface-2: #252523;
+    --surface-3: #31312e;
+    --text: #edece8;
+    --muted: #a8a7a0;
+    --faint: #7c7b75;
+    --border: #383834;
+    --accent: #8aa4ff;
+    --accent-soft: rgba(138, 164, 255, 0.16);
+
+    --k-endpoint: #3bc9db;
+    --k-contract: #91a7ff;
+    --k-event: #f783ac;
+    --k-type: #b197fc;
+    --k-data: #a5b4c3;
+    --k-storage: #66b8d6;
+    --k-inside: #a8a7a0;
+    --type-soft: rgba(177, 151, 252, 0.16);
+
+    --breaking: #ff8787;
+    --migration: #ffb454;
+    --additive: #69db7c;
+    --breaking-bg: #3d1d1d;
+    --migration-bg: #3a2a12;
+    --additive-bg: #18331f;
+    --ask: #b197fc;
+    --ask-bg: #2a2340;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.25);
   }
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); }
 button { font: inherit; color: inherit; }
-code { font-family: var(--mono); font-size: 12px; }
-h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+h1 { font-size: 21px; margin: 0; letter-spacing: -0.015em; }
 h2 { font-size: 15px; margin: 28px 0 10px; }
 h3 { font-size: 14px; margin: 0 0 4px; }
 p { margin: 4px 0; }
+kbd { font: 11px var(--mono); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--surface); color: var(--text); }
 .muted { color: var(--muted); }
 .noscript { padding: 16px; }
 .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border); font-size: 11px; color: var(--muted); }
 .linklike { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; text-align: left; }
 .x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* shell: main column + thin conversation sidebar */
-.shell { display: grid; grid-template-columns: minmax(0, 1fr) 300px; min-height: 100vh; }
-.main { min-width: 0; padding: 20px 20px 48px; }
+.shell { display: grid; grid-template-columns: minmax(0, 1fr) 290px; min-height: 100vh; }
+.main { min-width: 0; padding: 18px 22px 48px; }
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
-  .main { padding: 16px 16px 32px; }
+  .main { padding: 14px 16px 32px; }
 }
 
-header.top { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+header.top { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .heading { display: flex; gap: 10px; align-items: center; }
 .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.tabs, .phase-strip { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
-.tabs button, .phase-strip button { border: 0; background: transparent; padding: 5px 12px; cursor: pointer; }
-.tabs button + button, .phase-strip button + button { border-left: 1px solid var(--border); }
-.tabs button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-.phase-strip button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.tabs { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.tabs button { border: 0; background: transparent; padding: 5px 13px; cursor: pointer; }
+.tabs button + button { border-left: 1px solid var(--border); }
+.tabs button[aria-pressed="true"] { background: var(--text); color: var(--bg); font-weight: 600; }
+
+/* search */
+.search { position: relative; }
+.search input { width: 240px; max-width: 100%; font: inherit; font-size: 13px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+.search input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.hits { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; width: 380px; max-width: calc(100vw - 32px); list-style: none; margin: 0; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); }
+.hits li { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 0 8px; padding: 5px 8px; border-radius: 6px; cursor: pointer; }
+.hits li.on, .hits li:hover { background: var(--surface-2); }
+.hit-label { font-family: var(--mono); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hit-hint { grid-column: 2; font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kind { grid-row: span 2; align-self: start; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding-top: 2px; }
+.kind.k-endpoint { color: var(--k-endpoint); }
+.kind.k-contract, .kind.k-operation { color: var(--k-contract); }
+.kind.k-event { color: var(--k-event); }
+.kind.k-type { color: var(--k-type); }
+.kind.k-data { color: var(--k-data); }
+.kind.k-storage { color: var(--k-storage); }
+.kind.k-word { color: var(--ask); }
+
+/* briefing: the page in ten seconds */
+.briefing { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px 18px; align-items: start; margin-bottom: 12px; }
+@media (max-width: 1100px) { .briefing { grid-template-columns: minmax(0, 1fr); } }
+.eyebrow { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.ask { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--text); border-radius: 10px; padding: 10px 14px; }
+.ask p { font-size: 15px; line-height: 1.45; margin: 2px 0 0; }
+.tiles { display: flex; flex-wrap: wrap; gap: 8px; }
+.tile { display: flex; flex-direction: column; align-items: flex-start; min-width: 76px; padding: 6px 11px 7px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; text-align: left; transition: transform 0.1s, box-shadow 0.1s; }
+.tile:not(:disabled):hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+.tile:disabled { cursor: default; opacity: 0.5; }
+.tile .n { font-size: 22px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .l { font-size: 12px; color: var(--muted); }
+.tile.breaking .n { color: var(--breaking); }
+.tile.migration .n { color: var(--migration); }
+.tile.additive .n { color: var(--additive); }
+.tile.asks .n { color: var(--ask); }
+.tile.checks .n { color: var(--migration); }
+.tile.breaking.active { background: var(--breaking-bg); border-color: var(--breaking); }
+.tile.migration.active { background: var(--migration-bg); border-color: var(--migration); }
+.tile.additive.active { background: var(--additive-bg); border-color: var(--additive); }
+.tile.asks:not(:disabled) { background: var(--ask-bg); border-color: color-mix(in srgb, var(--ask) 40%, var(--border)); }
+.stepper { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; counter-reset: s; }
+.stepper button { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 3px 12px 3px 4px; cursor: pointer; font-size: 13px; }
+.stepper li:first-child button { padding-left: 12px; }
+.stepper button[aria-pressed="true"] { border-color: var(--text); background: var(--text); color: var(--bg); }
+.stepper li + li::before { content: "→"; color: var(--faint); margin-right: 6px; }
+.stepper li:nth-child(2)::before { content: none; }
+.stepper li { display: inline-flex; align-items: center; }
+.step { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-3); color: var(--text); font-size: 11.5px; font-weight: 700; flex: none; }
+.stepper button[aria-pressed="true"] .step { background: var(--bg); color: var(--text); }
+.words { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.words .eyebrow { margin-right: 4px; }
+.word { border: 1px solid color-mix(in srgb, var(--ask) 35%, var(--border)); background: var(--surface); color: var(--text); border-radius: 999px; padding: 1px 10px; font-size: 12.5px; cursor: pointer; text-decoration: none; }
+.word:hover { background: var(--ask-bg); }
+
+/* domain words in prose, and the one floating tip */
+.term { text-decoration: underline dotted color-mix(in srgb, var(--ask) 70%, transparent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; }
+.tip { position: fixed; z-index: 50; background: var(--text); color: var(--bg); font-size: 12.5px; line-height: 1.45; padding: 8px 10px; border-radius: 8px; box-shadow: var(--shadow); pointer-events: none; }
+.tip b { color: inherit; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.filter-chip { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 1px 10px; font-size: 12px; cursor: pointer; }
+.filter-chip.breaking { color: var(--breaking); border-color: var(--breaking); }
+.filter-chip.migration { color: var(--migration); border-color: var(--migration); }
+.filter-chip.additive { color: var(--additive); border-color: var(--additive); }
 
 /* canvas: a pannable, zoomable graph */
 .canvas-wrap { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.viewport { position: relative; height: 72vh; min-height: 460px; overflow: hidden; cursor: grab; touch-action: none;
+.viewport { position: relative; height: 74vh; min-height: 480px; overflow: hidden; cursor: grab; touch-action: none;
   background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 22px 22px; }
 .viewport.dragging { cursor: grabbing; }
 .viewport.dragging * { user-select: none; }
 .layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-.layer > .card { position: absolute; width: 300px; visibility: hidden; z-index: 1; cursor: default; }
+.layer > .card { position: absolute; width: 320px; visibility: hidden; z-index: 1; cursor: default; }
 .layer > .card.stub { width: 240px; }
-.card-head { cursor: grab; }
 .wires { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .wires.under { z-index: 0; }
 .wires.over { z-index: 2; }
 .tools { position: absolute; top: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 4px; z-index: 3; }
 .tool { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 2px 9px; cursor: pointer; font-size: 12.5px; min-width: 28px; }
 .tool:hover { border-color: var(--accent); color: var(--accent); }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 8px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
-.legend .hint { margin-left: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 8px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); align-items: center; }
+.legend .hint { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .legend .hint::before { display: none; }
-.legend span::before { content: ""; display: inline-block; width: 18px; height: 0; margin-right: 6px; vertical-align: 3px; border-top: 1.5px solid var(--muted); }
+.legend > span::before { content: ""; display: inline-block; width: 18px; height: 0; margin-right: 6px; vertical-align: 3px; border-top: 1.5px solid var(--muted); }
 .legend .lg-event::before { border-top-style: dashed; }
 .legend .lg-new::before { border-top-color: var(--additive); }
 .legend .lg-type::before { border-top-color: var(--type); border-top-style: dotted; border-top-width: 2px; }
+.legend .lg-route::before { border-top-color: var(--k-endpoint); border-top-width: 2px; }
 .legend .lg-tag::before { width: 10px; height: 10px; border: 0; border-radius: 2px; vertical-align: -1px; }
 .legend .lg-tag.breaking::before { background: var(--breaking); }
 .legend .lg-tag.migration::before { background: var(--migration); }
 .legend .lg-tag.additive::before { background: var(--additive); }
 
 /* cards */
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: opacity 0.15s; }
-.card.stub { border-style: dashed; background: transparent; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); transition: opacity 0.15s; }
+.card.stub { border-style: dashed; background: color-mix(in srgb, var(--surface) 55%, transparent); box-shadow: none; }
 .card.selected, .card .selected { box-shadow: inset 0 0 0 2px var(--accent); }
-.card.tag-breaking { border-color: var(--breaking); box-shadow: 0 0 0 1px var(--breaking); }
-.card.tag-migration { border-color: var(--migration); box-shadow: 0 0 0 1px var(--migration); }
-.card.tag-additive { border-color: var(--additive); box-shadow: 0 0 0 1px var(--additive); }
-.dim { opacity: 0.35; }
-.card-head { padding: 10px 12px; cursor: pointer; }
+.card.tag-breaking { border-color: var(--breaking); box-shadow: 0 0 0 1px var(--breaking), var(--shadow); }
+.card.tag-migration { border-color: var(--migration); box-shadow: 0 0 0 1px var(--migration), var(--shadow); }
+.card.tag-additive { border-color: var(--additive); box-shadow: 0 0 0 1px var(--additive), var(--shadow); }
+.dim { opacity: 0.32; }
+.unfocused { opacity: 0.22; }
+.card-head { padding: 11px 13px 9px; cursor: grab; }
 .title { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
-.name { font-weight: 600; font-size: 15px; }
-.purpose { color: var(--muted); font-size: 12.5px; }
-.listens { font-size: 12px; color: var(--muted); }
-.linklike.quiet { color: var(--text); text-decoration-color: var(--border); }
-.src { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-.note { font-size: 12.5px; border-left: 2px solid var(--border); padding-left: 8px; color: var(--muted); }
-.fact { font-size: 11px; color: var(--muted); background: var(--surface-2); border-radius: 4px; padding: 0 5px; }
+.name { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+.purpose { color: var(--muted); font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.facts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.fact { font-size: 11px; color: var(--muted); background: var(--surface-2); border-radius: 4px; padding: 0 6px; }
+.fact b { color: var(--text); }
+.tally { display: inline-flex; gap: 3px; margin-left: auto; }
+.title .tally + .x { margin-left: 4px; }
+.dot { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; font-size: 11.5px; font-weight: 700; display: inline-grid; place-items: center; color: #fff; }
+.dot.breaking { background: var(--breaking); }
+.dot.migration { background: var(--migration); }
+.dot.additive { background: var(--additive); }
+@media (prefers-color-scheme: dark) { .dot { color: #141414; } }
+.listens { display: flex; flex-wrap: wrap; gap: 3px 5px; align-items: baseline; font-size: 12px; margin-top: 4px; }
+.listens-label { color: var(--muted); }
+.ev { font-family: var(--mono); font-size: 11px; color: var(--k-event); background: color-mix(in srgb, var(--k-event) 10%, transparent); border-radius: 4px; padding: 0 5px; }
+.linklike.quiet { color: var(--text); text-decoration-color: var(--border); font-weight: 600; }
+.src { font-family: var(--mono); font-size: 11px; color: var(--faint); margin: 3px 0; }
+.note { font-size: 12.5px; border-left: 2px solid var(--border); padding-left: 8px; color: var(--muted); margin: 5px 0; }
+.note.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+details.src summary { cursor: pointer; list-style: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+details.src summary::-webkit-details-marker { display: none; }
 
-.row { border-top: 1px solid var(--border); }
+/* groups inside a card, coloured by kind */
+.group { border-top: 1px solid var(--border); --k: var(--muted); }
+.group.k-endpoints { --k: var(--k-endpoint); }
+.group.k-contracts { --k: var(--k-contract); }
+.group.k-data { --k: var(--k-data); }
+.group.k-storage { --k: var(--k-storage); }
+.group.k-inside { --k: var(--k-inside); }
+.group-label { display: flex; align-items: center; gap: 6px; padding: 6px 13px 2px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--k); }
+.group-count { font-weight: 600; color: var(--faint); letter-spacing: 0; }
+.group .icon { stroke: var(--k); }
+.group > .row:first-of-type { border-top-color: transparent; }
+.more { display: block; width: 100%; border: 0; border-top: 1px dashed var(--border); background: none; color: var(--k); font-size: 12px; padding: 5px 13px; text-align: left; cursor: pointer; }
 
-/* aggregates: a consistency boundary around the tables it holds */
-.aggregate { margin: 8px 10px; border: 1.5px dashed color-mix(in srgb, var(--muted) 60%, transparent); border-radius: 8px; overflow: hidden; }
-.aggregate .row:first-of-type { border-top-color: transparent; }
-.agg-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 10px; background: none; border: 0; cursor: pointer; text-align: left; font-size: 11.5px; color: var(--muted); }
-.agg-head:hover { background: var(--surface-2); }
-.agg-label { flex: 1; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
-.agg-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
-.invariants { margin: 0 10px 6px; padding-left: 16px; font-size: 12px; }
-.invariants li { margin: 2px 0; }
-.aggregate > .changes { padding: 0 10px; }
-
-/* sub-modules: rows that open into a card nested inside the parent */
-.nested { padding: 8px 10px 10px; border-top: 1px solid var(--border); background: var(--surface-2); }
-.nested > .card { box-shadow: none; }
-.title .x { margin-left: auto; }
-.row-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 12px; background: none; border: 0; cursor: pointer; text-align: left; position: relative; }
+.row { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.row-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 13px; background: none; border: 0; cursor: pointer; text-align: left; position: relative; min-height: 32px; }
 .row-head:hover { background: var(--surface-2); }
-.row-head[class*="mark-"]::before { content: ""; position: absolute; left: 0; top: 5px; bottom: 5px; width: 3px; border-radius: 0 2px 2px 0; }
+.row-head[class*="mark-"]::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 4px; width: 4px; border-radius: 0 3px 3px 0; }
 .row-head.mark-breaking::before { background: var(--breaking); }
 .row-head.mark-migration::before { background: var(--migration); }
 .row-head.mark-additive::before { background: var(--additive); }
-.row-name { flex: 1; }
+.row-name { flex: 1; font-weight: 550; min-width: 0; }
+.row-name.mono { font-weight: 500; }
 .meta { font-size: 11.5px; color: var(--muted); }
-.chev { color: var(--muted); transition: transform 0.15s; }
-.row-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.meta.sub-purpose { flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.root { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--k-data); margin-right: 5px; }
+.chev { color: var(--faint); transition: transform 0.15s; }
+.row-head[aria-expanded="true"] .chev, .agg-head[aria-expanded="true"] .chev, .store-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
 .icon { fill: none; stroke: var(--muted); stroke-width: 1.4; flex: none; }
-.row-body { padding: 2px 12px 10px; }
+.row-body { padding: 2px 13px 10px 13px; }
+.row.open > .row-head { background: color-mix(in srgb, var(--k) 6%, transparent); }
 
+/* endpoints */
+.endpoint .row-head { gap: 7px; }
+.verb { flex: none; font: 700 10px/1 var(--mono); letter-spacing: 0.02em; padding: 4px 5px; border-radius: 4px; min-width: 42px; text-align: center; color: #fff; background: var(--k-endpoint); }
+.v-get { background: #1971c2; }
+.v-post { background: #0b7285; }
+.v-put, .v-patch { background: #5f3dc4; }
+.v-delete { background: #a61e4d; }
+.v-trpc, .v-grpc, .v-graphql, .v-queue, .v-cli { background: transparent; color: var(--k-endpoint); border: 1px solid var(--k-endpoint); }
+@media (prefers-color-scheme: dark) {
+  .v-get { background: #74c0fc; color: #10202e; }
+  .v-post { background: #3bc9db; color: #0c2226; }
+  .v-put, .v-patch { background: #b197fc; color: #1e1530; }
+  .v-delete { background: #f783ac; color: #2f1220; }
+  .v-trpc, .v-grpc, .v-graphql, .v-queue, .v-cli { background: transparent; color: var(--k-endpoint); }
+}
+.path { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; overflow-wrap: break-word; line-height: 1.35; }
+.param { color: var(--k-endpoint); font-weight: 600; }
+.aud { flex: none; display: inline-flex; align-items: center; color: var(--faint); }
+.aud.a-public { color: var(--k-endpoint); }
+.icon.lock { stroke: currentColor; }
+.op-chip, .ep-chip { font-family: var(--mono); font-size: 11.5px; border-radius: 4px; padding: 0 5px; cursor: pointer; border: 1px solid transparent; }
+.op-chip { color: var(--k-contract); background: color-mix(in srgb, var(--k-contract) 11%, transparent); }
+.ep-chip { color: var(--k-endpoint); background: color-mix(in srgb, var(--k-endpoint) 11%, transparent); margin: 0 3px 2px 0; }
+.op-chip:hover, .ep-chip:hover { border-color: currentColor; }
+.callers { font-size: 11.5px; margin-top: 2px; }
+
+/* contracts */
 .member { padding: 6px 8px; margin: 0 -8px; border-radius: 6px; cursor: pointer; }
 .member:hover { background: var(--surface-2); }
 .sig { font-family: var(--mono); font-size: 12px; line-height: 1.7; word-break: break-word; }
-.mname { font-weight: 600; }
+.mname { font-weight: 700; }
+.arrow { color: var(--faint); }
 .fname { color: var(--muted); }
 .prim { color: var(--text); }
-.mode { font-family: var(--sans); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
-.mode.event { border-style: dashed; }
-.errs { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.mode { font-family: var(--sans); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 4px; padding: 0 4px; }
+.mode.command { color: var(--k-contract); background: color-mix(in srgb, var(--k-contract) 12%, transparent); }
+.mode.query { color: var(--k-contract); border: 1px solid color-mix(in srgb, var(--k-contract) 40%, transparent); }
+.mode.event { color: var(--k-event); background: color-mix(in srgb, var(--k-event) 11%, transparent); }
+.errs { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+.err { font-family: var(--mono); font-size: 10.5px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.err::before { content: "! "; color: var(--faint); }
 
 .chip { font-family: var(--mono); font-size: 12px; color: var(--type); background: var(--type-soft); border: 1px solid transparent; border-radius: 4px; padding: 0 4px; cursor: pointer; }
 .chip:hover, .chip.hot-type { border-color: var(--type); }
 .chip.linked { border-color: color-mix(in srgb, var(--type) 45%, transparent); }
-
 .types { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
 .type-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 12px; }
 .typecard { border: 1px solid color-mix(in srgb, var(--type) 40%, var(--border)); border-left: 3px solid var(--type); border-radius: 6px; padding: 6px 8px; background: var(--surface); }
 .typecard.hot-type, .row.hot-type { box-shadow: 0 0 0 2px var(--type-soft); }
 .type-head { display: flex; justify-content: space-between; align-items: center; }
-.type-name { background: none; border: 0; padding: 0; font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--type); cursor: pointer; }
+.type-name { background: none; border: 0; padding: 0; font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--type); cursor: pointer; }
 .fields { font-family: var(--mono); font-size: 12px; line-height: 1.75; }
-.key { font-family: var(--sans); font-size: 10.5px; color: var(--muted); margin-left: 6px; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.key { font-family: var(--sans); font-size: 10px; font-weight: 700; color: var(--k-data); margin-left: 6px; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
 .values { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .value { font-family: var(--mono); font-size: 11.5px; border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; }
-.aux { font-size: 12px; color: var(--muted); }
+.aux { font-size: 12px; color: var(--text); display: flex; flex-wrap: wrap; gap: 3px 5px; align-items: center; margin: 6px 0 2px; }
+.aux-label { color: var(--muted); }
+.has-facts { flex: none; font-size: 10px; font-weight: 700; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.pill { font-size: 11px; background: var(--surface-2); border-radius: 999px; padding: 0 7px; }
+
+/* aggregates: a consistency boundary around the tables it holds */
+.aggregate { margin: 6px 10px 8px; border: 1.5px dashed color-mix(in srgb, var(--k-data) 55%, transparent); border-radius: 9px; overflow: hidden; }
+.aggregate .row:first-of-type { border-top-color: transparent; }
+.agg-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 10px; background: none; border: 0; cursor: pointer; text-align: left; font-size: 11px; color: var(--k-data); }
+.agg-head:hover { background: var(--surface-2); }
+.agg-label { flex: 1; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+.invariants { margin: 2px 10px 8px; padding-left: 20px; font-size: 12px; }
+.invariants li { margin: 3px 0; }
+.invariants li::marker { color: var(--k-data); font-weight: 700; }
+.aggregate > .changes { padding: 0 10px; }
+
+/* storage */
+.store { margin: 6px 10px 8px; border: 1px solid color-mix(in srgb, var(--k-storage) 35%, var(--border)); border-radius: 9px; overflow: hidden; }
+.store-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; background: color-mix(in srgb, var(--k-storage) 6%, transparent); border: 0; cursor: pointer; text-align: left; }
+.store-name { flex: 1; font-weight: 600; font-size: 13px; }
+.engine { flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; padding: 1px 6px; border-radius: 4px; color: #fff; background: var(--k-storage); }
+.e-postgres { background: #336791; }
+.e-dynamodb { background: #3b48cc; }
+.e-mysql { background: #00758f; }
+.e-redis { background: #a51d2d; }
+.e-s3 { background: #3f8624; }
+@media (prefers-color-scheme: dark) { .engine { filter: brightness(1.25); } }
+.store .row { --k: var(--k-storage); }
+.store > .note { margin: 6px 10px; }
+.scan-count { flex: none; font-size: 10.5px; font-weight: 700; color: var(--migration); background: var(--migration-bg); border-radius: 4px; padding: 0 5px; }
+.cols { border-collapse: collapse; width: 100%; margin: 4px 0 6px; }
+.cols td { padding: 1px 8px 1px 0; vertical-align: baseline; }
+.cols tr + tr td { border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+.ctype { color: var(--k-storage); }
+.pk { font-family: var(--sans); font-size: 9.5px; font-weight: 700; color: var(--k-data); border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; margin-right: 5px; }
+.index { padding: 4px 0; border-top: 1px dashed var(--border); }
+.idx-kind { font-family: var(--sans); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--k-storage); margin-right: 4px; }
+.kv { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.serves { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.tick { color: var(--additive); font-weight: 700; margin-right: 4px; }
+.scans { margin-top: 6px; font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+.store-link { border: 0; background: none; padding: 0; cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--text); display: inline-flex; gap: 2px; align-items: center; }
+.store-link:hover { text-decoration: underline; }
+
+/* sub-modules: rows that open into a card nested inside the parent */
+.nested { padding: 8px 10px 10px; border-top: 1px solid var(--border); background: var(--surface-2); }
+.nested > .card { box-shadow: none; }
+.title .x { margin-left: auto; }
 
 .flash { animation: flash 0.9s ease-out; }
-@keyframes flash { from { box-shadow: 0 0 0 4px var(--type-soft), 0 0 0 2px var(--type); } }
+@keyframes flash { from { box-shadow: 0 0 0 4px var(--accent-soft), 0 0 0 2px var(--accent); } }
 
 /* changes, shown on the node they affect */
 .changes { list-style: none; padding: 0; margin: 6px 0 2px; font-size: 12px; }
 .changes li { padding: 2px 0; display: flex; gap: 6px; align-items: baseline; }
 .changes li.internal { color: var(--muted); }
-.row > .changes { padding: 0 12px 6px; margin-top: 0; }
-.tag { flex: none; font-size: 10.5px; font-weight: 600; padding: 0 5px; border-radius: 4px; }
+.row > .changes, .store > .changes { padding: 0 13px 6px; margin-top: 0; }
+.tag { flex: none; font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 4px; }
 .tag.breaking { color: var(--breaking); background: var(--breaking-bg); }
 .tag.migration { color: var(--migration); background: var(--migration-bg); }
 .tag.additive { color: var(--additive); background: var(--additive-bg); }
 .tag.internal { color: var(--muted); background: var(--surface-2); }
 
 /* wires */
-.wire { fill: none; stroke: var(--muted); stroke-width: 1.3; opacity: 0.8; }
-.wire.event { stroke-dasharray: 5 4; }
+.wire { fill: none; stroke: var(--muted); stroke-width: 1.3; opacity: 0.75; }
+.wire.event { stroke: var(--k-event); stroke-dasharray: 5 4; opacity: 0.6; }
 .wire.type { stroke: var(--type); stroke-dasharray: 2 3; stroke-width: 1.4; opacity: 0.55; }
-.wire.new { stroke: var(--additive); opacity: 1; stroke-width: 1.6; }
-.wire.hot { stroke: var(--accent); stroke-width: 2; opacity: 1; }
+.wire.new { stroke: var(--additive); opacity: 1; stroke-width: 1.8; }
+.wire.hot { stroke: var(--accent); stroke-width: 2.2; opacity: 1; }
+.wire.event.hot { stroke: var(--k-event); }
+.wire.route.hot { stroke: var(--k-endpoint); stroke-width: 2; }
 .wire.type.hot { stroke: var(--type); stroke-dasharray: none; }
-.wire.faded, .wire-label.faded { opacity: 0.15; }
-.wire-label { font: 11px var(--sans); fill: var(--muted); }
-.wire-label.hot { fill: var(--accent); }
+.wire.faded { opacity: 0.1; }
 .ah { fill: var(--muted); }
 .ah.hot { fill: var(--accent); }
+.ah.route { fill: var(--k-endpoint); }
 
 /* context below the canvas */
-.context { max-width: 980px; }
+.context { max-width: 1000px; margin-top: 16px; }
+details.ctx { border-top: 1px solid var(--border); }
+details.ctx > summary { list-style: none; cursor: pointer; padding: 4px 0; }
+details.ctx > summary::-webkit-details-marker { display: none; }
+details.ctx > summary h2 { display: inline-flex; gap: 8px; align-items: center; margin: 10px 0; }
+details.ctx > summary h2::before { content: "›"; color: var(--muted); transition: transform 0.15s; display: inline-block; }
+details.ctx[open] > summary h2::before { transform: rotate(90deg); }
+details.ctx[open] { padding-bottom: 14px; }
+.count { font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; }
+details.ctx.asks > summary h2 { color: var(--ask); }
+details.ctx.asks .count { color: var(--ask); border-color: var(--ask); }
+.qs { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; counter-reset: q; }
+.qs li { counter-increment: q; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--ask); border-radius: 10px; padding: 10px 14px; }
+.q { font-size: 14.5px; font-weight: 600; }
+.q::before { content: counter(q) ". "; color: var(--ask); }
+.options { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.option { font-size: 12.5px; border: 1px solid color-mix(in srgb, var(--ask) 40%, var(--border)); background: var(--ask-bg); border-radius: 999px; padding: 1px 10px; }
+.node-link { border: 0; background: none; padding: 0; cursor: pointer; font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.node-link::before { content: "↗ "; }
+.node-link:hover { color: var(--accent); }
 .phases { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .phase { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
-.phase.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.counts { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
-.qs li, .ds li { margin: 6px 0; }
-.diag { padding: 8px 12px; border-left: 3px solid var(--breaking); background: var(--surface); margin: 6px 0; font-size: 13px; }
+.phase h3 { display: flex; align-items: center; gap: 8px; }
+.phase .tally { margin-left: auto; }
+.phase.active { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
+.ds { list-style: none; padding: 0; display: grid; gap: 10px; margin: 0; }
+.ds li { border-left: 3px solid var(--border); padding: 2px 0 2px 12px; }
+.d { font-weight: 600; }
+.why { color: var(--muted); font-size: 13px; }
+.why-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
+.diag { padding: 8px 12px; border-left: 3px solid var(--breaking); background: var(--surface); border-radius: 0 8px 8px 0; margin: 6px 0; font-size: 13px; }
 .diag.warning { border-color: var(--migration); }
+.glossary { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; }
+.glossary dt { font-weight: 700; }
+.glossary dd { margin: 0; color: var(--muted); }
 
 /* conversation sidebar */
 .chat { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
-@media (max-width: 900px) { .chat { position: static; height: auto; border-left: 0; border-top: 1px solid var(--border); } }
-.chat-head { padding: 14px 16px 10px; font-weight: 600; border-bottom: 1px solid var(--border); }
+.chat-head { padding: 14px 16px 10px; font-weight: 700; border-bottom: 1px solid var(--border); }
 .msgs { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.empty { color: var(--muted); font-size: 12.5px; margin: 0; }
 .msg { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; font-size: 13px; }
 .msg.queued { border: 1px dashed var(--border); background: transparent; }
 .who { display: flex; justify-content: space-between; gap: 6px; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
@@ -231,32 +453,29 @@ header.top { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center
 .composer textarea { width: 100%; resize: vertical; font: inherit; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .btn { border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
+@media (prefers-color-scheme: dark) { .btn { color: #10152a; } }
 .btn.quiet { background: transparent; color: var(--accent); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 
-/* phones */
-@media (max-width: 900px) {
-  .viewport { height: 62vh; min-height: 380px; }
-  .legend .hint { margin-left: 0; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 
-/* collapsible context sections */
-details.ctx { border-top: 1px solid var(--border); }
-details.ctx > summary { list-style: none; cursor: pointer; padding: 4px 0; }
-details.ctx > summary::-webkit-details-marker { display: none; }
-details.ctx > summary h2 { display: inline-flex; gap: 8px; align-items: center; margin: 10px 0; }
-details.ctx > summary h2::before { content: "›"; color: var(--muted); transition: transform 0.15s; display: inline-block; }
-details.ctx[open] > summary h2::before { transform: rotate(90deg); }
-.count { font-size: 11px; font-weight: 500; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; }
-details.ctx[open] { padding-bottom: 12px; }
-.context { margin-top: 16px; }
+/* phones */
+@media (max-width: 900px) {
+  .chat { position: static; height: auto; border-left: 0; border-top: 1px solid var(--border); }
+  .viewport { height: 62vh; min-height: 380px; }
+  .legend .hint { margin-left: 0; }
+  .controls, .search, .search input { width: 100%; }
+  .tile { min-width: 0; flex: 1 1 88px; }
+}
 
 </style>
 </head>
 <body>
 <noscript><p class="noscript">This plan is drawn by an inline script. The plan data is in the #plan-doc block of this file.</p></noscript>
 <div id="app"></div>
-<script type="application/json" id="plan-doc">{"format":"plan-doc/1","title":"Take payment at checkout","intent":"We're adding card payments to checkout. Orders should only count as placed once the money is captured.","mode":"plan","current":{"kind":"plan","name":"shop","modules":[{"kind":"module","name":"Orders","purpose":"Turns a customer's basket into an order and tracks it to completion.","depth":"mapped","entities":[{"kind":"entity","name":"Order","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"customerId","type":{"kind":"prim","name":"uuid"}},{"name":"status","type":{"kind":"ref","name":"OrderStatus"}},{"name":"total","type":{"kind":"prim","name":"decimal"}},{"name":"placedAt","type":{"kind":"prim","name":"datetime"}}],"key":["id"],"indexes":[{"fields":["customerId"]}]},{"kind":"entity","name":"OrderLine","doc":"Price is copied at order time; Catalog prices may change later.","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"productId","type":{"kind":"prim","name":"uuid"}},{"name":"quantity","type":{"kind":"prim","name":"int"}},{"name":"unitPrice","type":{"kind":"prim","name":"decimal"}}],"key":["id"],"indexes":[{"fields":["orderId"]}]}],"aggregates":[{"kind":"aggregate","name":"Order","root":"Order","members":["OrderLine"],"invariants":["Total equals the sum of its lines.","Lines cannot change once the order is placed."]}],"repositories":[{"kind":"repository","name":"OrderRepository","entity":"Order","methods":[{"kind":"get"},{"kind":"find","by":["customerId"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Orders","types":[{"kind":"enum","name":"OrderStatus","values":["Placed","Cancelled"]},{"kind":"record","name":"LineInput","fields":[{"name":"productId","type":{"kind":"prim","name":"uuid"}},{"name":"quantity","type":{"kind":"prim","name":"int"}}]},{"kind":"record","name":"OrderLineView","fields":[{"name":"product","type":{"kind":"ref","name":"Catalog.ProductSummary"}},{"name":"quantity","type":{"kind":"prim","name":"int"}},{"name":"unitPrice","type":{"kind":"prim","name":"decimal"}}]},{"kind":"record","name":"OrderView","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"status","type":{"kind":"ref","name":"OrderStatus"}},{"name":"total","type":{"kind":"prim","name":"decimal"}},{"name":"lines","type":{"kind":"list","of":{"kind":"ref","name":"OrderLineView"}}}]}],"operations":[{"kind":"operation","name":"PlaceOrder","mode":"command","input":[{"name":"customerId","type":{"kind":"prim","name":"uuid"}},{"name":"lines","type":{"kind":"list","of":{"kind":"ref","name":"LineInput"}}}],"output":{"kind":"ref","name":"OrderView"},"errors":["EmptyOrder","UnknownProduct"]},{"kind":"operation","name":"CancelOrder","mode":"command","input":[{"name":"id","type":{"kind":"prim","name":"uuid"}}],"output":null,"errors":["NotFound","AlreadyCancelled"]},{"kind":"operation","name":"GetOrder","mode":"query","input":[{"name":"id","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"ref","name":"OrderView"},"errors":["NotFound"]},{"kind":"operation","name":"ListForCustomer","mode":"query","input":[{"name":"customerId","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"list","of":{"kind":"ref","name":"OrderView"}},"errors":[]}],"events":[{"kind":"event","name":"OrderPlaced","payload":[{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"total","type":{"kind":"prim","name":"decimal"}}]}]}],"uses":[{"contract":"Catalog","subscribes":[]},{"contract":"Customers","subscribes":[]}],"modules":[]},{"kind":"module","name":"Catalog","purpose":"Owns what can be sold and at what price.","depth":"mapped","entities":[{"kind":"entity","name":"Product","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"sku","type":{"kind":"prim","name":"string"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"price","type":{"kind":"prim","name":"decimal"}},{"name":"active","type":{"kind":"prim","name":"boolean"}}],"key":["id"],"indexes":[{"fields":["sku"],"unique":true},{"fields":["active"]}]}],"aggregates":[],"repositories":[{"kind":"repository","name":"ProductRepository","entity":"Product","methods":[{"kind":"get"},{"kind":"find","by":["sku"]},{"kind":"find","by":["active"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Catalog","types":[{"kind":"record","name":"ProductSummary","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"price","type":{"kind":"prim","name":"decimal"}}]}],"operations":[{"kind":"operation","name":"GetProduct","mode":"query","input":[{"name":"id","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"ref","name":"ProductSummary"},"errors":["NotFound"]},{"kind":"operation","name":"ListActive","mode":"query","input":[],"output":{"kind":"list","of":{"kind":"ref","name":"ProductSummary"}},"errors":[]}],"events":[{"kind":"event","name":"ProductPriceChanged","payload":[{"name":"productId","type":{"kind":"prim","name":"uuid"}},{"name":"price","type":{"kind":"prim","name":"decimal"}}]}]}],"uses":[],"modules":[]},{"kind":"module","name":"Customers","purpose":"Accounts, addresses and sign-in.","depth":"stub","sources":[{"path":"src/customers/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Customers","types":[],"operations":[],"events":[]}],"uses":[],"modules":[]},{"kind":"module","name":"Notifications","purpose":"Emails and push messages to customers.","depth":"stub","sources":[{"path":"src/notify/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[{"contract":"Orders","subscribes":["OrderPlaced"]}],"modules":[]}]},"proposed":{"kind":"plan","name":"shop","modules":[{"kind":"module","name":"Orders","purpose":"Turns a customer's basket into an order and tracks it to completion.","depth":"mapped","entities":[{"kind":"entity","name":"Order","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"customerId","type":{"kind":"prim","name":"uuid"}},{"name":"status","type":{"kind":"ref","name":"OrderStatus"}},{"name":"total","type":{"kind":"prim","name":"decimal"}},{"name":"placedAt","type":{"kind":"prim","name":"datetime"}},{"name":"paymentId","type":{"kind":"optional","of":{"kind":"prim","name":"uuid"}}}],"key":["id"],"indexes":[{"fields":["customerId"]}]},{"kind":"entity","name":"OrderLine","doc":"Price is copied at order time; Catalog prices may change later.","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"productId","type":{"kind":"prim","name":"uuid"}},{"name":"quantity","type":{"kind":"prim","name":"int"}},{"name":"unitPrice","type":{"kind":"prim","name":"decimal"}}],"key":["id"],"indexes":[{"fields":["orderId"]}]}],"aggregates":[{"kind":"aggregate","name":"Order","root":"Order","members":["OrderLine"],"invariants":["Total equals the sum of its lines.","Lines cannot change once the order is placed.","Status only moves forward: AwaitingPayment, then Paid or PaymentFailed."]}],"repositories":[{"kind":"repository","name":"OrderRepository","entity":"Order","methods":[{"kind":"get"},{"kind":"find","by":["customerId"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Orders","types":[{"kind":"enum","name":"OrderStatus","values":["AwaitingPayment","Paid","PaymentFailed","Cancelled"]},{"kind":"record","name":"LineInput","fields":[{"name":"productId","type":{"kind":"prim","name":"uuid"}},{"name":"quantity","type":{"kind":"prim","name":"int"}}]},{"kind":"record","name":"OrderLineView","fields":[{"name":"product","type":{"kind":"ref","name":"Catalog.ProductSummary"}},{"name":"quantity","type":{"kind":"prim","name":"int"}},{"name":"unitPrice","type":{"kind":"prim","name":"decimal"}}]},{"kind":"record","name":"OrderView","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"status","type":{"kind":"ref","name":"OrderStatus"}},{"name":"total","type":{"kind":"prim","name":"decimal"}},{"name":"lines","type":{"kind":"list","of":{"kind":"ref","name":"OrderLineView"}}}]}],"operations":[{"kind":"operation","name":"PlaceOrder","mode":"command","input":[{"name":"customerId","type":{"kind":"prim","name":"uuid"}},{"name":"lines","type":{"kind":"list","of":{"kind":"ref","name":"LineInput"}}}],"output":{"kind":"ref","name":"OrderView"},"errors":["EmptyOrder","UnknownProduct"]},{"kind":"operation","name":"CancelOrder","mode":"command","input":[{"name":"id","type":{"kind":"prim","name":"uuid"}}],"output":null,"errors":["NotFound","AlreadyCancelled","AlreadyPaid"]},{"kind":"operation","name":"GetOrder","mode":"query","input":[{"name":"id","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"ref","name":"OrderView"},"errors":["NotFound"]},{"kind":"operation","name":"ListForCustomer","mode":"query","input":[{"name":"customerId","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"list","of":{"kind":"ref","name":"OrderView"}},"errors":[]}],"events":[{"kind":"event","name":"OrderPlaced","payload":[{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"total","type":{"kind":"prim","name":"decimal"}}]},{"kind":"event","name":"OrderPaid","payload":[{"name":"orderId","type":{"kind":"prim","name":"uuid"}}]}]}],"uses":[{"contract":"Catalog","subscribes":[]},{"contract":"Payments","subscribes":["PaymentCaptured","PaymentFailed"]},{"contract":"Customers","subscribes":[]}],"modules":[]},{"kind":"module","name":"Catalog","purpose":"Owns what can be sold and at what price.","depth":"mapped","entities":[{"kind":"entity","name":"Product","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"sku","type":{"kind":"prim","name":"string"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"price","type":{"kind":"prim","name":"decimal"}},{"name":"active","type":{"kind":"prim","name":"boolean"}}],"key":["id"],"indexes":[{"fields":["sku"],"unique":true},{"fields":["active"]}]}],"aggregates":[],"repositories":[{"kind":"repository","name":"ProductRepository","entity":"Product","methods":[{"kind":"get"},{"kind":"find","by":["sku"]},{"kind":"find","by":["active"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Catalog","types":[{"kind":"record","name":"ProductSummary","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"price","type":{"kind":"prim","name":"decimal"}}]}],"operations":[{"kind":"operation","name":"GetProduct","mode":"query","input":[{"name":"id","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"ref","name":"ProductSummary"},"errors":["NotFound"]},{"kind":"operation","name":"ListActive","mode":"query","input":[],"output":{"kind":"list","of":{"kind":"ref","name":"ProductSummary"}},"errors":[]}],"events":[{"kind":"event","name":"ProductPriceChanged","payload":[{"name":"productId","type":{"kind":"prim","name":"uuid"}},{"name":"price","type":{"kind":"prim","name":"decimal"}}]}]}],"uses":[],"modules":[]},{"kind":"module","name":"Payments","purpose":"Collects money for an order and reports the outcome. Knows nothing about what was bought.","depth":"mapped","entities":[{"kind":"entity","name":"Payment","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"amount","type":{"kind":"prim","name":"decimal"}},{"name":"status","type":{"kind":"ref","name":"PaymentStatus"}},{"name":"providerRef","type":{"kind":"optional","of":{"kind":"prim","name":"string"}}},{"name":"createdAt","type":{"kind":"prim","name":"datetime"}}],"key":["id"],"indexes":[{"fields":["orderId"]}]}],"aggregates":[],"repositories":[{"kind":"repository","name":"PaymentRepository","entity":"Payment","methods":[{"kind":"get"},{"kind":"find","by":["orderId"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Payments","types":[{"kind":"enum","name":"PaymentStatus","values":["Pending","Captured","Failed"]}],"operations":[{"kind":"operation","name":"StartPayment","mode":"command","input":[{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"amount","type":{"kind":"prim","name":"decimal"}}],"output":{"kind":"prim","name":"uuid"},"errors":["AlreadyPaid"]},{"kind":"operation","name":"GetStatus","mode":"query","input":[{"name":"orderId","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"ref","name":"PaymentStatus"},"errors":["NotFound"]}],"events":[{"kind":"event","name":"PaymentCaptured","payload":[{"name":"paymentId","type":{"kind":"prim","name":"uuid"}},{"name":"orderId","type":{"kind":"prim","name":"uuid"}}]},{"kind":"event","name":"PaymentFailed","payload":[{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"reason","type":{"kind":"prim","name":"string"}}]}]}],"uses":[{"contract":"Gateway","subscribes":[]}],"modules":[{"kind":"module","name":"Gateway","purpose":"Talks to the card provider. One implementation per provider; nothing outside Payments sees it.","depth":"mapped","entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Gateway","types":[],"operations":[{"kind":"operation","name":"Charge","mode":"command","input":[{"name":"amount","type":{"kind":"prim","name":"decimal"}},{"name":"reference","type":{"kind":"prim","name":"string"}}],"output":{"kind":"prim","name":"string"},"errors":["Declined","ProviderDown"]}],"events":[]}],"uses":[],"modules":[]}]},{"kind":"module","name":"Customers","purpose":"Accounts, addresses and sign-in.","depth":"stub","sources":[{"path":"src/customers/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Customers","types":[],"operations":[],"events":[]}],"uses":[],"modules":[]},{"kind":"module","name":"Notifications","purpose":"Emails and push messages to customers.","depth":"stub","sources":[{"path":"src/notify/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[{"contract":"Orders","subscribes":["OrderPlaced"]}],"modules":[]}]},"slices":[{"name":"Payments on its own","goal":"Ship the Payments module with its table and contract. Nothing calls it yet, so it can be tested against the provider in isolation.","nodes":["Payments"]},{"name":"Orders takes payment","goal":"PlaceOrder starts a payment and the order follows the payment events. Includes the status migration.","nodes":["Orders"],"notes":"Existing Placed orders become Paid: they were taken before payments existed."}],"questions":[{"text":"When a payment fails, should the order be cancelled or left open for the customer to retry?","node":"Orders/contract/Orders","options":["Cancel","Keep open for 24h"]}],"decisions":[{"text":"Payments stores the order id but never calls Orders.","why":"Orders depends on Payments, not the other way round. That avoids a cycle and keeps Payments reusable for subscriptions later.","node":"Payments"}],"facts":{"Orders/contract/Orders":[{"label":"Call sites","value":9,"detail":"example value; slice 3 reads these from the code"}],"Orders":[{"label":"Most complex function","value":"placeOrder (17)","detail":"example value"}]}}</script>
+<script type="application/json" id="plan-doc">{"format":"plan-doc/1","title":"Take payment at checkout","intent":"We're adding card payments to checkout. Orders should only count as placed once the money is captured.","mode":"plan","current":{"kind":"plan","name":"shop","modules":[{"kind":"module","name":"Orders","purpose":"Turns a customer's basket into an order and tracks it to completion.","depth":"mapped","entities":[{"kind":"entity","name":"Order","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"customerId","type":{"kind":"prim","name":"uuid"}},{"name":"status","type":{"kind":"ref","name":"OrderStatus"}},{"name":"total","type":{"kind":"prim","name":"decimal"}},{"name":"placedAt","type":{"kind":"prim","name":"datetime"}}],"key":["id"],"indexes":[]},{"kind":"entity","name":"OrderLine","doc":"Price is copied at order time; Catalog prices may change later.","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"productId","type":{"kind":"prim","name":"uuid"}},{"name":"quantity","type":{"kind":"prim","name":"int"}},{"name":"unitPrice","type":{"kind":"prim","name":"decimal"}}],"key":["id"],"indexes":[]}],"aggregates":[{"kind":"aggregate","name":"Order","root":"Order","members":["OrderLine"],"invariants":["Total equals the sum of its lines.","Lines cannot change once the order is placed."]}],"repositories":[{"kind":"repository","name":"OrderRepository","entity":"Order","methods":[{"kind":"get"},{"kind":"find","by":["customerId"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Orders","types":[{"kind":"enum","name":"OrderStatus","values":["Placed","Cancelled"]},{"kind":"record","name":"LineInput","fields":[{"name":"productId","type":{"kind":"prim","name":"uuid"}},{"name":"quantity","type":{"kind":"prim","name":"int"}}]},{"kind":"record","name":"OrderLineView","fields":[{"name":"product","type":{"kind":"ref","name":"Catalog.ProductSummary"}},{"name":"quantity","type":{"kind":"prim","name":"int"}},{"name":"unitPrice","type":{"kind":"prim","name":"decimal"}}]},{"kind":"record","name":"OrderView","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"status","type":{"kind":"ref","name":"OrderStatus"}},{"name":"total","type":{"kind":"prim","name":"decimal"}},{"name":"lines","type":{"kind":"list","of":{"kind":"ref","name":"OrderLineView"}}}]}],"operations":[{"kind":"operation","name":"PlaceOrder","mode":"command","input":[{"name":"customerId","type":{"kind":"prim","name":"uuid"}},{"name":"lines","type":{"kind":"list","of":{"kind":"ref","name":"LineInput"}}}],"output":{"kind":"ref","name":"OrderView"},"errors":["EmptyOrder","UnknownProduct"]},{"kind":"operation","name":"CancelOrder","mode":"command","input":[{"name":"id","type":{"kind":"prim","name":"uuid"}}],"output":null,"errors":["NotFound","AlreadyCancelled"]},{"kind":"operation","name":"GetOrder","mode":"query","input":[{"name":"id","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"ref","name":"OrderView"},"errors":["NotFound"]},{"kind":"operation","name":"ListForCustomer","mode":"query","input":[{"name":"customerId","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"list","of":{"kind":"ref","name":"OrderView"}},"errors":[]}],"events":[{"kind":"event","name":"OrderPlaced","payload":[{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"total","type":{"kind":"prim","name":"decimal"}}]}]}],"uses":[{"contract":"Catalog","subscribes":[]},{"contract":"Customers","subscribes":[]}],"stores":[{"kind":"store","name":"orders db","engine":"postgres","holds":[{"entity":"Order","table":"orders","indexes":[{"on":["customerId"]}],"columns":[{"field":"total","type":"numeric(12,2)"}]},{"entity":"OrderLine","table":"order_lines","indexes":[{"on":["orderId"]}]}]}],"endpoints":[{"kind":"endpoint","protocol":"http","method":"POST","path":"/orders","name":"POST /orders","calls":["Orders.PlaceOrder"],"auth":"customer session","audience":"public"},{"kind":"endpoint","protocol":"http","method":"GET","path":"/orders/{id}","name":"GET /orders/{id}","calls":["Orders.GetOrder"],"auth":"customer session","audience":"public"},{"kind":"endpoint","protocol":"http","method":"POST","path":"/orders/{id}/cancel","name":"POST /orders/{id}/cancel","calls":["Orders.CancelOrder"],"auth":"customer session","audience":"public"},{"kind":"endpoint","protocol":"http","method":"GET","path":"/customers/{customerId}/orders","name":"GET /customers/{customerId}/orders","calls":["Orders.ListForCustomer"],"auth":"customer session","audience":"public"}],"modules":[]},{"kind":"module","name":"Catalog","purpose":"Owns what can be sold and at what price.","depth":"mapped","entities":[{"kind":"entity","name":"Product","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"sku","type":{"kind":"prim","name":"string"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"price","type":{"kind":"prim","name":"decimal"}},{"name":"active","type":{"kind":"prim","name":"boolean"}}],"key":["id"],"indexes":[]}],"aggregates":[],"repositories":[{"kind":"repository","name":"ProductRepository","entity":"Product","methods":[{"kind":"get"},{"kind":"find","by":["sku"]},{"kind":"find","by":["active"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Catalog","types":[{"kind":"record","name":"ProductSummary","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"price","type":{"kind":"prim","name":"decimal"}}]}],"operations":[{"kind":"operation","name":"GetProduct","mode":"query","input":[{"name":"id","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"ref","name":"ProductSummary"},"errors":["NotFound"]},{"kind":"operation","name":"ListActive","mode":"query","input":[],"output":{"kind":"list","of":{"kind":"ref","name":"ProductSummary"}},"errors":[]}],"events":[{"kind":"event","name":"ProductPriceChanged","payload":[{"name":"productId","type":{"kind":"prim","name":"uuid"}},{"name":"price","type":{"kind":"prim","name":"decimal"}}]}]}],"uses":[],"stores":[{"kind":"store","name":"catalog db","engine":"postgres","holds":[{"entity":"Product","table":"products","indexes":[{"on":["sku"],"unique":true},{"on":["active"]}]}]}],"endpoints":[],"modules":[]},{"kind":"module","name":"Customers","purpose":"Accounts, addresses and sign-in.","depth":"stub","sources":[{"path":"src/customers/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Customers","types":[],"operations":[],"events":[]}],"uses":[],"stores":[],"endpoints":[],"modules":[]},{"kind":"module","name":"Notifications","purpose":"Emails and push messages to customers.","depth":"stub","sources":[{"path":"src/notify/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[{"contract":"Orders","subscribes":["OrderPlaced"]}],"stores":[],"endpoints":[],"modules":[]}]},"proposed":{"kind":"plan","name":"shop","modules":[{"kind":"module","name":"Orders","purpose":"Turns a customer's basket into an order and tracks it to completion.","depth":"mapped","entities":[{"kind":"entity","name":"Order","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"customerId","type":{"kind":"prim","name":"uuid"}},{"name":"status","type":{"kind":"ref","name":"OrderStatus"}},{"name":"total","type":{"kind":"prim","name":"decimal"}},{"name":"placedAt","type":{"kind":"prim","name":"datetime"}},{"name":"paymentId","type":{"kind":"optional","of":{"kind":"prim","name":"uuid"}}}],"key":["id"],"indexes":[]},{"kind":"entity","name":"OrderLine","doc":"Price is copied at order time; Catalog prices may change later.","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"productId","type":{"kind":"prim","name":"uuid"}},{"name":"quantity","type":{"kind":"prim","name":"int"}},{"name":"unitPrice","type":{"kind":"prim","name":"decimal"}}],"key":["id"],"indexes":[]}],"aggregates":[{"kind":"aggregate","name":"Order","root":"Order","members":["OrderLine"],"invariants":["Total equals the sum of its lines.","Lines cannot change once the order is placed.","Status only moves forward: AwaitingPayment, then Paid or PaymentFailed."]}],"repositories":[{"kind":"repository","name":"OrderRepository","entity":"Order","methods":[{"kind":"get"},{"kind":"find","by":["customerId"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Orders","types":[{"kind":"enum","name":"OrderStatus","values":["AwaitingPayment","Paid","PaymentFailed","Cancelled"]},{"kind":"record","name":"LineInput","fields":[{"name":"productId","type":{"kind":"prim","name":"uuid"}},{"name":"quantity","type":{"kind":"prim","name":"int"}}]},{"kind":"record","name":"OrderLineView","fields":[{"name":"product","type":{"kind":"ref","name":"Catalog.ProductSummary"}},{"name":"quantity","type":{"kind":"prim","name":"int"}},{"name":"unitPrice","type":{"kind":"prim","name":"decimal"}}]},{"kind":"record","name":"OrderView","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"status","type":{"kind":"ref","name":"OrderStatus"}},{"name":"total","type":{"kind":"prim","name":"decimal"}},{"name":"lines","type":{"kind":"list","of":{"kind":"ref","name":"OrderLineView"}}}]}],"operations":[{"kind":"operation","name":"PlaceOrder","mode":"command","input":[{"name":"customerId","type":{"kind":"prim","name":"uuid"}},{"name":"lines","type":{"kind":"list","of":{"kind":"ref","name":"LineInput"}}}],"output":{"kind":"ref","name":"OrderView"},"errors":["EmptyOrder","UnknownProduct"]},{"kind":"operation","name":"CancelOrder","mode":"command","input":[{"name":"id","type":{"kind":"prim","name":"uuid"}}],"output":null,"errors":["NotFound","AlreadyCancelled","AlreadyPaid"]},{"kind":"operation","name":"GetOrder","mode":"query","input":[{"name":"id","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"ref","name":"OrderView"},"errors":["NotFound"]},{"kind":"operation","name":"ListForCustomer","mode":"query","input":[{"name":"customerId","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"list","of":{"kind":"ref","name":"OrderView"}},"errors":[]}],"events":[{"kind":"event","name":"OrderPlaced","payload":[{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"total","type":{"kind":"prim","name":"decimal"}}]},{"kind":"event","name":"OrderPaid","payload":[{"name":"orderId","type":{"kind":"prim","name":"uuid"}}]}]}],"uses":[{"contract":"Catalog","subscribes":[]},{"contract":"Payments","subscribes":["PaymentCaptured","PaymentFailed"]},{"contract":"Customers","subscribes":[]}],"stores":[{"kind":"store","name":"orders db","engine":"postgres","holds":[{"entity":"Order","table":"orders","indexes":[{"on":["customerId"]}],"columns":[{"field":"total","type":"numeric(12,2)"}]},{"entity":"OrderLine","table":"order_lines","indexes":[{"on":["orderId"]}]}]}],"endpoints":[{"kind":"endpoint","protocol":"http","method":"POST","path":"/orders","name":"POST /orders","calls":["Orders.PlaceOrder"],"auth":"customer session","audience":"public"},{"kind":"endpoint","protocol":"http","method":"GET","path":"/orders/{id}","name":"GET /orders/{id}","calls":["Orders.GetOrder"],"auth":"customer session","audience":"public"},{"kind":"endpoint","protocol":"http","method":"POST","path":"/orders/{id}/cancel","name":"POST /orders/{id}/cancel","calls":["Orders.CancelOrder"],"auth":"customer session","audience":"public"},{"kind":"endpoint","protocol":"http","method":"GET","path":"/customers/{customerId}/orders","name":"GET /customers/{customerId}/orders","calls":["Orders.ListForCustomer"],"auth":"customer session","audience":"public"},{"kind":"endpoint","protocol":"http","method":"GET","path":"/orders/{id}/payment","name":"GET /orders/{id}/payment","calls":["Payments.GetStatus"],"auth":"customer session","audience":"public"}],"modules":[]},{"kind":"module","name":"Catalog","purpose":"Owns what can be sold and at what price.","depth":"mapped","entities":[{"kind":"entity","name":"Product","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"sku","type":{"kind":"prim","name":"string"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"price","type":{"kind":"prim","name":"decimal"}},{"name":"active","type":{"kind":"prim","name":"boolean"}}],"key":["id"],"indexes":[]}],"aggregates":[],"repositories":[{"kind":"repository","name":"ProductRepository","entity":"Product","methods":[{"kind":"get"},{"kind":"find","by":["sku"]},{"kind":"find","by":["active"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Catalog","types":[{"kind":"record","name":"ProductSummary","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"price","type":{"kind":"prim","name":"decimal"}}]}],"operations":[{"kind":"operation","name":"GetProduct","mode":"query","input":[{"name":"id","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"ref","name":"ProductSummary"},"errors":["NotFound"]},{"kind":"operation","name":"ListActive","mode":"query","input":[],"output":{"kind":"list","of":{"kind":"ref","name":"ProductSummary"}},"errors":[]}],"events":[{"kind":"event","name":"ProductPriceChanged","payload":[{"name":"productId","type":{"kind":"prim","name":"uuid"}},{"name":"price","type":{"kind":"prim","name":"decimal"}}]}]}],"uses":[],"stores":[{"kind":"store","name":"catalog db","engine":"postgres","holds":[{"entity":"Product","table":"products","indexes":[{"on":["sku"],"unique":true},{"on":["active"]}]}]}],"endpoints":[],"modules":[]},{"kind":"module","name":"Payments","purpose":"Collects money for an order and reports the outcome. Knows nothing about what was bought.","depth":"mapped","entities":[{"kind":"entity","name":"Payment","fields":[{"name":"id","type":{"kind":"prim","name":"uuid"}},{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"amount","type":{"kind":"prim","name":"decimal"}},{"name":"status","type":{"kind":"ref","name":"PaymentStatus"}},{"name":"providerRef","type":{"kind":"optional","of":{"kind":"prim","name":"string"}}},{"name":"createdAt","type":{"kind":"prim","name":"datetime"}}],"key":["id"],"indexes":[]}],"aggregates":[],"repositories":[{"kind":"repository","name":"PaymentRepository","entity":"Payment","methods":[{"kind":"get"},{"kind":"find","by":["orderId"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Payments","types":[{"kind":"enum","name":"PaymentStatus","values":["Pending","Captured","Failed"]}],"operations":[{"kind":"operation","name":"StartPayment","mode":"command","input":[{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"amount","type":{"kind":"prim","name":"decimal"}}],"output":{"kind":"prim","name":"uuid"},"errors":["AlreadyPaid"]},{"kind":"operation","name":"GetStatus","mode":"query","input":[{"name":"orderId","type":{"kind":"prim","name":"uuid"}}],"output":{"kind":"ref","name":"PaymentStatus"},"errors":["NotFound"]}],"events":[{"kind":"event","name":"PaymentCaptured","payload":[{"name":"paymentId","type":{"kind":"prim","name":"uuid"}},{"name":"orderId","type":{"kind":"prim","name":"uuid"}}]},{"kind":"event","name":"PaymentFailed","payload":[{"name":"orderId","type":{"kind":"prim","name":"uuid"}},{"name":"reason","type":{"kind":"prim","name":"string"}}]}]}],"uses":[{"contract":"Gateway","subscribes":[]}],"stores":[{"kind":"store","name":"payments table","engine":"dynamodb","holds":[{"entity":"Payment","table":"payments","pk":"PAY#{id}","gsis":[{"name":"byOrder","pk":"ORDER#{orderId}","sk":"AT#{createdAt}"}]}],"note":"Single-table design: one item per payment, found by order through the byOrder index."}],"endpoints":[],"modules":[{"kind":"module","name":"Gateway","purpose":"Talks to the card provider. One implementation per provider; nothing outside Payments sees it.","depth":"mapped","entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Gateway","types":[],"operations":[{"kind":"operation","name":"Charge","mode":"command","input":[{"name":"amount","type":{"kind":"prim","name":"decimal"}},{"name":"reference","type":{"kind":"prim","name":"string"}}],"output":{"kind":"prim","name":"string"},"errors":["Declined","ProviderDown"]}],"events":[]}],"uses":[],"stores":[],"endpoints":[],"modules":[]}]},{"kind":"module","name":"Customers","purpose":"Accounts, addresses and sign-in.","depth":"stub","sources":[{"path":"src/customers/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Customers","types":[],"operations":[],"events":[]}],"uses":[],"stores":[],"endpoints":[],"modules":[]},{"kind":"module","name":"Notifications","purpose":"Emails and push messages to customers.","depth":"stub","sources":[{"path":"src/notify/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[{"contract":"Orders","subscribes":["OrderPlaced"]}],"stores":[],"endpoints":[],"modules":[]}]},"slices":[{"name":"Payments on its own","goal":"Ship the Payments module with its table and contract. Nothing calls it yet, so it can be tested against the provider in isolation.","nodes":["Payments"]},{"name":"Orders takes payment","goal":"PlaceOrder starts a payment and the order follows the payment events. Includes the status migration.","nodes":["Orders"],"notes":"Existing Placed orders become Paid: they were taken before payments existed."}],"questions":[{"text":"When a payment fails, should the order be cancelled or left open for the customer to retry?","node":"Orders/contract/Orders","options":["Cancel","Keep open for 24h"]}],"decisions":[{"text":"Payments stores the order id but never calls Orders.","why":"Orders depends on Payments, not the other way round. That avoids a cycle and keeps Payments reusable for subscriptions later.","node":"Payments"}],"facts":{"Orders/contract/Orders":[{"label":"Call sites","value":9,"detail":"example value; slice 3 reads these from the code"}],"Orders":[{"label":"Most complex function","value":"placeOrder (17)","detail":"example value"}]}}</script>
 <script type="text/plain" id="plan-outline">
 # plan: Take payment at checkout (plan)
 # intent: We're adding card payments to checkout. Orders should only count as placed once the money is captured.
@@ -270,6 +489,9 @@ details.ctx[open] { padding-bottom: 12px; }
 # - a sub-module (indented module) is internal to its parent: only the parent and its siblings may use its contract
 # - an aggregate is loaded and saved whole through its root; its other tables have no repository of their own,
 #   and the invariants listed under it hold whenever it is saved
+# - a store lists the physical tables a module owns; each `served by` is the key or index a lookup must use,
+#   and `SCAN` marks a lookup with none
+# - an endpoint only parses, authorises (`auth`) and calls the operations after `->`; no logic of its own
 # - [stub] modules are named only; their insides are not specified
 
 module [Orders] — Turns a customer's basket into an order and tracks it to completion.
@@ -278,8 +500,12 @@ module [Orders] — Turns a customer's basket into an order and tracks it to com
     invariant: Total equals the sum of its lines.
     invariant: Lines cannot change once the order is placed.
     invariant: Status only moves forward: AwaitingPayment, then Paid or PaymentFailed.
-  table [Orders/entity/Order] { id: uuid, customerId: uuid, status: OrderStatus, total: decimal, placedAt: datetime, paymentId: uuid | null } key(id) index (customerId) access get find(customerId) save
-  table [Orders/entity/OrderLine] { id: uuid, orderId: uuid, productId: uuid, quantity: int, unitPrice: decimal } key(id) index (orderId)
+  entity [Orders/entity/Order] { id: uuid, customerId: uuid, status: OrderStatus, total: decimal, placedAt: datetime, paymentId: uuid | null } key(id) access get find(customerId) save
+  entity [Orders/entity/OrderLine] { id: uuid, orderId: uuid, productId: uuid, quantity: int, unitPrice: decimal } key(id)
+  store [Orders/store/orders db] postgres
+    table [Orders/store/orders db/Order] "orders" holds Order index (customerId) columns total numeric(12,2)
+    table [Orders/store/orders db/OrderLine] "order_lines" holds OrderLine index (orderId)
+  served by: Order get by key -> primary key; Order find by customerId -> orders_customerId_idx
   contract [Orders/contract/Orders]
     type [Orders/contract/Orders/type/OrderStatus] = "AwaitingPayment" | "Paid" | "PaymentFailed" | "Cancelled"
     type [Orders/contract/Orders/type/LineInput] = { productId: uuid, quantity: int }
@@ -291,9 +517,17 @@ module [Orders] — Turns a customer's basket into an order and tracks it to com
     query [Orders/contract/Orders/ListForCustomer] (customerId: uuid) => OrderView[]
     event [Orders/contract/Orders/OrderPlaced] { orderId: uuid, total: decimal }
     event [Orders/contract/Orders/OrderPaid] { orderId: uuid }
+  endpoint [Orders/endpoint/POST ∕orders] http POST /orders auth(public, customer session) -> Orders.PlaceOrder
+  endpoint [Orders/endpoint/GET ∕orders∕{id}] http GET /orders/{id} auth(public, customer session) -> Orders.GetOrder
+  endpoint [Orders/endpoint/POST ∕orders∕{id}∕cancel] http POST /orders/{id}/cancel auth(public, customer session) -> Orders.CancelOrder
+  endpoint [Orders/endpoint/GET ∕customers∕{customerId}∕orders] http GET /customers/{customerId}/orders auth(public, customer session) -> Orders.ListForCustomer
+  endpoint [Orders/endpoint/GET ∕orders∕{id}∕payment] http GET /orders/{id}/payment auth(public, customer session) -> Payments.GetStatus
 module [Catalog] — Owns what can be sold and at what price.
   uses: nothing
-  table [Catalog/entity/Product] { id: uuid, sku: string, name: string, price: decimal, active: boolean } key(id) index unique (sku) (active) access get find(sku) find(active) save
+  entity [Catalog/entity/Product] { id: uuid, sku: string, name: string, price: decimal, active: boolean } key(id) access get find(sku) find(active) save
+  store [Catalog/store/catalog db] postgres
+    table [Catalog/store/catalog db/Product] "products" holds Product index unique (sku) (active)
+  served by: Product get by key -> primary key; Product find by sku -> products_sku_idx; Product find by active -> products_active_idx
   contract [Catalog/contract/Catalog]
     type [Catalog/contract/Catalog/type/ProductSummary] = { id: uuid, name: string, price: decimal }
     query [Catalog/contract/Catalog/GetProduct] (id: uuid) => ProductSummary ! NotFound
@@ -301,7 +535,10 @@ module [Catalog] — Owns what can be sold and at what price.
     event [Catalog/contract/Catalog/ProductPriceChanged] { productId: uuid, price: decimal }
 module [Payments] — Collects money for an order and reports the outcome. Knows nothing about what was bought.
   uses: Gateway
-  table [Payments/entity/Payment] { id: uuid, orderId: uuid, amount: decimal, status: PaymentStatus, providerRef: string | null, createdAt: datetime } key(id) index (orderId) access get find(orderId) save
+  entity [Payments/entity/Payment] { id: uuid, orderId: uuid, amount: decimal, status: PaymentStatus, providerRef: string | null, createdAt: datetime } key(id) access get find(orderId) save
+  store [Payments/store/payments table] dynamodb
+    table [Payments/store/payments table/Payment] "payments" holds Payment pk "PAY#{id}" byOrder(pk "ORDER#{orderId}" sk "AT#{createdAt}")
+  served by: Payment get by key -> table key; Payment find by orderId -> byOrder
   contract [Payments/contract/Payments]
     type [Payments/contract/Payments/type/PaymentStatus] = "Pending" | "Captured" | "Failed"
     cmd [Payments/contract/Payments/StartPayment] (orderId: uuid, amount: decimal) => uuid ! AlreadyPaid
@@ -324,6 +561,7 @@ changes (from current):
   [Payments] additive: new module
   [Orders/entity/Order] migration: add column paymentId: uuid?
   [Orders/aggregate/Order] internal: new invariant: Status only moves forward: AwaitingPayment, then Paid or PaymentFailed.
+  [Orders/endpoint/GET ∕orders∕{id}∕payment] additive: new endpoint
   [Orders] internal: now depends on Payments
   [Orders] internal: now reacts to Payments.PaymentCaptured
   [Orders] internal: now reacts to Payments.PaymentFailed
@@ -349,7 +587,7 @@ decisions:
 open questions:
   [Orders/contract/Orders] When a payment fails, should the order be cancelled or left open for the customer to retry? options: Cancel | Keep open for 24h
 </script>
-<script type="application/json" id="plan-view">{"current":{"modules":[{"id":"Orders","name":"Orders","purpose":"Turns a customer's basket into an order and tracks it to completion.","depth":"mapped","sources":[],"usedBy":["Notifications"],"contracts":[{"id":"Orders/contract/Orders","name":"Orders","sources":[],"types":[{"id":"Orders/contract/Orders/type/OrderStatus","name":"OrderStatus","kind":"enum","values":["Placed","Cancelled"]},{"id":"Orders/contract/Orders/type/LineInput","name":"LineInput","kind":"record","fields":[{"name":"productId","type":[{"s":"uuid"}]},{"name":"quantity","type":[{"s":"int"}]}]},{"id":"Orders/contract/Orders/type/OrderLineView","name":"OrderLineView","kind":"record","fields":[{"name":"product","type":[{"s":"Catalog.ProductSummary","ref":"Catalog/contract/Catalog/type/ProductSummary"}]},{"name":"quantity","type":[{"s":"int"}]},{"name":"unitPrice","type":[{"s":"decimal"}]}]},{"id":"Orders/contract/Orders/type/OrderView","name":"OrderView","kind":"record","fields":[{"name":"id","type":[{"s":"uuid"}]},{"name":"status","type":[{"s":"OrderStatus","ref":"Orders/contract/Orders/type/OrderStatus"}]},{"name":"total","type":[{"s":"decimal"}]},{"name":"lines","type":[{"s":"OrderLineView","ref":"Orders/contract/Orders/type/OrderLineView"},{"s":"[]"}]}]}],"operations":[{"id":"Orders/contract/Orders/PlaceOrder","name":"PlaceOrder","mode":"command","input":[{"name":"customerId","type":[{"s":"uuid"}]},{"name":"lines","type":[{"s":"LineInput","ref":"Orders/contract/Orders/type/LineInput"},{"s":"[]"}]}],"output":[{"s":"OrderView","ref":"Orders/contract/Orders/type/OrderView"}],"errors":["EmptyOrder","UnknownProduct"]},{"id":"Orders/contract/Orders/CancelOrder","name":"CancelOrder","mode":"command","input":[{"name":"id","type":[{"s":"uuid"}]}],"output":null,"errors":["NotFound","AlreadyCancelled"]},{"id":"Orders/contract/Orders/GetOrder","name":"GetOrder","mode":"query","input":[{"name":"id","type":[{"s":"uuid"}]}],"output":[{"s":"OrderView","ref":"Orders/contract/Orders/type/OrderView"}],"errors":["NotFound"]},{"id":"Orders/contract/Orders/ListForCustomer","name":"ListForCustomer","mode":"query","input":[{"name":"customerId","type":[{"s":"uuid"}]}],"output":[{"s":"OrderView","ref":"Orders/contract/Orders/type/OrderView"},{"s":"[]"}],"errors":[]}],"events":[{"id":"Orders/contract/Orders/OrderPlaced","name":"OrderPlaced","payload":[{"name":"orderId","type":[{"s":"uuid"}]},{"name":"total","type":[{"s":"decimal"}]}]}]}],"aggregates":[{"id":"Orders/aggregate/Order","name":"Order","root":"Orders/entity/Order","members":["Orders/entity/OrderLine"],"invariants":["Total equals the sum of its lines.","Lines cannot change once the order is placed."]}],"entities":[{"id":"Orders/entity/Order","name":"Order","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"customerId","type":[{"s":"uuid"}],"key":false},{"name":"status","type":[{"s":"OrderStatus","ref":"Orders/contract/Orders/type/OrderStatus"}],"key":false},{"name":"total","type":[{"s":"decimal"}],"key":false},{"name":"placedAt","type":[{"s":"datetime"}],"key":false}],"indexes":["customerId"],"access":["get by key","find by customerId","save"]},{"id":"Orders/entity/OrderLine","name":"OrderLine","note":"Price is copied at order time; Catalog prices may change later.","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"orderId","type":[{"s":"uuid"}],"key":false},{"name":"productId","type":[{"s":"uuid"}],"key":false},{"name":"quantity","type":[{"s":"int"}],"key":false},{"name":"unitPrice","type":[{"s":"decimal"}],"key":false}],"indexes":["orderId"],"access":[]}],"modules":[]},{"id":"Catalog","name":"Catalog","purpose":"Owns what can be sold and at what price.","depth":"mapped","sources":[],"usedBy":["Orders"],"contracts":[{"id":"Catalog/contract/Catalog","name":"Catalog","sources":[],"types":[{"id":"Catalog/contract/Catalog/type/ProductSummary","name":"ProductSummary","kind":"record","fields":[{"name":"id","type":[{"s":"uuid"}]},{"name":"name","type":[{"s":"string"}]},{"name":"price","type":[{"s":"decimal"}]}]}],"operations":[{"id":"Catalog/contract/Catalog/GetProduct","name":"GetProduct","mode":"query","input":[{"name":"id","type":[{"s":"uuid"}]}],"output":[{"s":"ProductSummary","ref":"Catalog/contract/Catalog/type/ProductSummary"}],"errors":["NotFound"]},{"id":"Catalog/contract/Catalog/ListActive","name":"ListActive","mode":"query","input":[],"output":[{"s":"ProductSummary","ref":"Catalog/contract/Catalog/type/ProductSummary"},{"s":"[]"}],"errors":[]}],"events":[{"id":"Catalog/contract/Catalog/ProductPriceChanged","name":"ProductPriceChanged","payload":[{"name":"productId","type":[{"s":"uuid"}]},{"name":"price","type":[{"s":"decimal"}]}]}]}],"aggregates":[],"entities":[{"id":"Catalog/entity/Product","name":"Product","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"sku","type":[{"s":"string"}],"key":false},{"name":"name","type":[{"s":"string"}],"key":false},{"name":"price","type":[{"s":"decimal"}],"key":false},{"name":"active","type":[{"s":"boolean"}],"key":false}],"indexes":["sku (unique)","active"],"access":["get by key","find by sku","find by active","save"]}],"modules":[]},{"id":"Customers","name":"Customers","purpose":"Accounts, addresses and sign-in.","depth":"stub","sources":["src/customers/"],"usedBy":["Orders"],"contracts":[{"id":"Customers/contract/Customers","name":"Customers","sources":[],"types":[],"operations":[],"events":[]}],"aggregates":[],"entities":[],"modules":[]},{"id":"Notifications","name":"Notifications","purpose":"Emails and push messages to customers.","depth":"stub","sources":["src/notify/"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"modules":[]}],"edges":[{"from":"Orders","to":"Catalog/contract/Catalog","kind":"call"},{"from":"Orders","to":"Customers/contract/Customers","kind":"call"},{"from":"Notifications","to":"Orders/contract/Orders","kind":"call"},{"from":"Orders/contract/Orders","to":"Notifications","kind":"event","label":"OrderPlaced"}],"diagnostics":[]},"proposed":{"modules":[{"id":"Orders","name":"Orders","purpose":"Turns a customer's basket into an order and tracks it to completion.","depth":"mapped","sources":[],"usedBy":["Notifications"],"contracts":[{"id":"Orders/contract/Orders","name":"Orders","sources":[],"types":[{"id":"Orders/contract/Orders/type/OrderStatus","name":"OrderStatus","kind":"enum","values":["AwaitingPayment","Paid","PaymentFailed","Cancelled"]},{"id":"Orders/contract/Orders/type/LineInput","name":"LineInput","kind":"record","fields":[{"name":"productId","type":[{"s":"uuid"}]},{"name":"quantity","type":[{"s":"int"}]}]},{"id":"Orders/contract/Orders/type/OrderLineView","name":"OrderLineView","kind":"record","fields":[{"name":"product","type":[{"s":"Catalog.ProductSummary","ref":"Catalog/contract/Catalog/type/ProductSummary"}]},{"name":"quantity","type":[{"s":"int"}]},{"name":"unitPrice","type":[{"s":"decimal"}]}]},{"id":"Orders/contract/Orders/type/OrderView","name":"OrderView","kind":"record","fields":[{"name":"id","type":[{"s":"uuid"}]},{"name":"status","type":[{"s":"OrderStatus","ref":"Orders/contract/Orders/type/OrderStatus"}]},{"name":"total","type":[{"s":"decimal"}]},{"name":"lines","type":[{"s":"OrderLineView","ref":"Orders/contract/Orders/type/OrderLineView"},{"s":"[]"}]}]}],"operations":[{"id":"Orders/contract/Orders/PlaceOrder","name":"PlaceOrder","mode":"command","input":[{"name":"customerId","type":[{"s":"uuid"}]},{"name":"lines","type":[{"s":"LineInput","ref":"Orders/contract/Orders/type/LineInput"},{"s":"[]"}]}],"output":[{"s":"OrderView","ref":"Orders/contract/Orders/type/OrderView"}],"errors":["EmptyOrder","UnknownProduct"]},{"id":"Orders/contract/Orders/CancelOrder","name":"CancelOrder","mode":"command","input":[{"name":"id","type":[{"s":"uuid"}]}],"output":null,"errors":["NotFound","AlreadyCancelled","AlreadyPaid"]},{"id":"Orders/contract/Orders/GetOrder","name":"GetOrder","mode":"query","input":[{"name":"id","type":[{"s":"uuid"}]}],"output":[{"s":"OrderView","ref":"Orders/contract/Orders/type/OrderView"}],"errors":["NotFound"]},{"id":"Orders/contract/Orders/ListForCustomer","name":"ListForCustomer","mode":"query","input":[{"name":"customerId","type":[{"s":"uuid"}]}],"output":[{"s":"OrderView","ref":"Orders/contract/Orders/type/OrderView"},{"s":"[]"}],"errors":[]}],"events":[{"id":"Orders/contract/Orders/OrderPlaced","name":"OrderPlaced","payload":[{"name":"orderId","type":[{"s":"uuid"}]},{"name":"total","type":[{"s":"decimal"}]}]},{"id":"Orders/contract/Orders/OrderPaid","name":"OrderPaid","payload":[{"name":"orderId","type":[{"s":"uuid"}]}]}]}],"aggregates":[{"id":"Orders/aggregate/Order","name":"Order","root":"Orders/entity/Order","members":["Orders/entity/OrderLine"],"invariants":["Total equals the sum of its lines.","Lines cannot change once the order is placed.","Status only moves forward: AwaitingPayment, then Paid or PaymentFailed."]}],"entities":[{"id":"Orders/entity/Order","name":"Order","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"customerId","type":[{"s":"uuid"}],"key":false},{"name":"status","type":[{"s":"OrderStatus","ref":"Orders/contract/Orders/type/OrderStatus"}],"key":false},{"name":"total","type":[{"s":"decimal"}],"key":false},{"name":"placedAt","type":[{"s":"datetime"}],"key":false},{"name":"paymentId","type":[{"s":"uuid"},{"s":"?"}],"key":false}],"indexes":["customerId"],"access":["get by key","find by customerId","save"]},{"id":"Orders/entity/OrderLine","name":"OrderLine","note":"Price is copied at order time; Catalog prices may change later.","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"orderId","type":[{"s":"uuid"}],"key":false},{"name":"productId","type":[{"s":"uuid"}],"key":false},{"name":"quantity","type":[{"s":"int"}],"key":false},{"name":"unitPrice","type":[{"s":"decimal"}],"key":false}],"indexes":["orderId"],"access":[]}],"modules":[]},{"id":"Catalog","name":"Catalog","purpose":"Owns what can be sold and at what price.","depth":"mapped","sources":[],"usedBy":["Orders"],"contracts":[{"id":"Catalog/contract/Catalog","name":"Catalog","sources":[],"types":[{"id":"Catalog/contract/Catalog/type/ProductSummary","name":"ProductSummary","kind":"record","fields":[{"name":"id","type":[{"s":"uuid"}]},{"name":"name","type":[{"s":"string"}]},{"name":"price","type":[{"s":"decimal"}]}]}],"operations":[{"id":"Catalog/contract/Catalog/GetProduct","name":"GetProduct","mode":"query","input":[{"name":"id","type":[{"s":"uuid"}]}],"output":[{"s":"ProductSummary","ref":"Catalog/contract/Catalog/type/ProductSummary"}],"errors":["NotFound"]},{"id":"Catalog/contract/Catalog/ListActive","name":"ListActive","mode":"query","input":[],"output":[{"s":"ProductSummary","ref":"Catalog/contract/Catalog/type/ProductSummary"},{"s":"[]"}],"errors":[]}],"events":[{"id":"Catalog/contract/Catalog/ProductPriceChanged","name":"ProductPriceChanged","payload":[{"name":"productId","type":[{"s":"uuid"}]},{"name":"price","type":[{"s":"decimal"}]}]}]}],"aggregates":[],"entities":[{"id":"Catalog/entity/Product","name":"Product","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"sku","type":[{"s":"string"}],"key":false},{"name":"name","type":[{"s":"string"}],"key":false},{"name":"price","type":[{"s":"decimal"}],"key":false},{"name":"active","type":[{"s":"boolean"}],"key":false}],"indexes":["sku (unique)","active"],"access":["get by key","find by sku","find by active","save"]}],"modules":[]},{"id":"Payments","name":"Payments","purpose":"Collects money for an order and reports the outcome. Knows nothing about what was bought.","depth":"mapped","sources":[],"usedBy":["Orders"],"contracts":[{"id":"Payments/contract/Payments","name":"Payments","sources":[],"types":[{"id":"Payments/contract/Payments/type/PaymentStatus","name":"PaymentStatus","kind":"enum","values":["Pending","Captured","Failed"]}],"operations":[{"id":"Payments/contract/Payments/StartPayment","name":"StartPayment","mode":"command","input":[{"name":"orderId","type":[{"s":"uuid"}]},{"name":"amount","type":[{"s":"decimal"}]}],"output":[{"s":"uuid"}],"errors":["AlreadyPaid"]},{"id":"Payments/contract/Payments/GetStatus","name":"GetStatus","mode":"query","input":[{"name":"orderId","type":[{"s":"uuid"}]}],"output":[{"s":"PaymentStatus","ref":"Payments/contract/Payments/type/PaymentStatus"}],"errors":["NotFound"]}],"events":[{"id":"Payments/contract/Payments/PaymentCaptured","name":"PaymentCaptured","payload":[{"name":"paymentId","type":[{"s":"uuid"}]},{"name":"orderId","type":[{"s":"uuid"}]}]},{"id":"Payments/contract/Payments/PaymentFailed","name":"PaymentFailed","payload":[{"name":"orderId","type":[{"s":"uuid"}]},{"name":"reason","type":[{"s":"string"}]}]}]}],"aggregates":[],"entities":[{"id":"Payments/entity/Payment","name":"Payment","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"orderId","type":[{"s":"uuid"}],"key":false},{"name":"amount","type":[{"s":"decimal"}],"key":false},{"name":"status","type":[{"s":"PaymentStatus","ref":"Payments/contract/Payments/type/PaymentStatus"}],"key":false},{"name":"providerRef","type":[{"s":"string"},{"s":"?"}],"key":false},{"name":"createdAt","type":[{"s":"datetime"}],"key":false}],"indexes":["orderId"],"access":["get by key","find by orderId","save"]}],"modules":[{"id":"Payments/Gateway","name":"Gateway","purpose":"Talks to the card provider. One implementation per provider; nothing outside Payments sees it.","depth":"mapped","sources":[],"usedBy":["Payments"],"contracts":[{"id":"Payments/Gateway/contract/Gateway","name":"Gateway","sources":[],"types":[],"operations":[{"id":"Payments/Gateway/contract/Gateway/Charge","name":"Charge","mode":"command","input":[{"name":"amount","type":[{"s":"decimal"}]},{"name":"reference","type":[{"s":"string"}]}],"output":[{"s":"string"}],"errors":["Declined","ProviderDown"]}],"events":[]}],"aggregates":[],"entities":[],"modules":[]}]},{"id":"Customers","name":"Customers","purpose":"Accounts, addresses and sign-in.","depth":"stub","sources":["src/customers/"],"usedBy":["Orders"],"contracts":[{"id":"Customers/contract/Customers","name":"Customers","sources":[],"types":[],"operations":[],"events":[]}],"aggregates":[],"entities":[],"modules":[]},{"id":"Notifications","name":"Notifications","purpose":"Emails and push messages to customers.","depth":"stub","sources":["src/notify/"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"modules":[]}],"edges":[{"from":"Orders","to":"Catalog/contract/Catalog","kind":"call"},{"from":"Orders","to":"Payments/contract/Payments","kind":"call"},{"from":"Payments/contract/Payments","to":"Orders","kind":"event","label":"PaymentCaptured, PaymentFailed"},{"from":"Orders","to":"Customers/contract/Customers","kind":"call"},{"from":"Payments","to":"Payments/Gateway/contract/Gateway","kind":"call"},{"from":"Notifications","to":"Orders/contract/Orders","kind":"call"},{"from":"Orders/contract/Orders","to":"Notifications","kind":"event","label":"OrderPlaced"}],"diagnostics":[]},"changes":[{"module":"Payments","tag":"additive","what":"new module: Collects money for an order and reports the outcome. Knows nothing about what was bought.","short":"new module","node":"Payments"},{"module":"Orders","tag":"migration","what":"Order: add column paymentId: uuid?","short":"add column paymentId: uuid?","node":"Orders/entity/Order"},{"module":"Orders","tag":"internal","what":"Order: new invariant: Status only moves forward: AwaitingPayment, then Paid or PaymentFailed.","short":"new invariant: Status only moves forward: AwaitingPayment, then Paid or PaymentFailed.","node":"Orders/aggregate/Order"},{"module":"Orders","tag":"internal","what":"now depends on Payments","node":"Orders"},{"module":"Orders","tag":"internal","what":"now reacts to Payments.PaymentCaptured","node":"Orders"},{"module":"Orders","tag":"internal","what":"now reacts to Payments.PaymentFailed","node":"Orders"},{"module":"Orders","tag":"breaking","what":"Orders: OrderStatus gains value \"AwaitingPayment\" (exhaustive switches must handle it)","short":"gains value \"AwaitingPayment\" (exhaustive switches must handle it)","contract":"Orders","node":"Orders/contract/Orders/type/OrderStatus"},{"module":"Orders","tag":"breaking","what":"Orders: OrderStatus gains value \"Paid\" (exhaustive switches must handle it)","short":"gains value \"Paid\" (exhaustive switches must handle it)","contract":"Orders","node":"Orders/contract/Orders/type/OrderStatus"},{"module":"Orders","tag":"breaking","what":"Orders: OrderStatus gains value \"PaymentFailed\" (exhaustive switches must handle it)","short":"gains value \"PaymentFailed\" (exhaustive switches must handle it)","contract":"Orders","node":"Orders/contract/Orders/type/OrderStatus"},{"module":"Orders","tag":"breaking","what":"Orders: OrderStatus loses value \"Placed\"","short":"loses value \"Placed\"","contract":"Orders","node":"Orders/contract/Orders/type/OrderStatus"},{"module":"Orders","tag":"breaking","what":"Orders: CancelOrder: can now fail with AlreadyPaid","short":"can now fail with AlreadyPaid","contract":"Orders","node":"Orders/contract/Orders/CancelOrder"},{"module":"Orders","tag":"additive","what":"Orders: new event OrderPaid","short":"new event","contract":"Orders","node":"Orders/contract/Orders/OrderPaid"},{"module":"Orders","tag":"migration","what":"Order.status: rows with \"Placed\" must be mapped to a new OrderStatus","short":"status: rows with \"Placed\" must be mapped to a new OrderStatus","node":"Orders/entity/Order"},{"module":"Orders","tag":"migration","what":"Order.status: database enum gains \"AwaitingPayment\", \"Paid\", \"PaymentFailed\"","short":"status: database enum gains \"AwaitingPayment\", \"Paid\", \"PaymentFailed\"","node":"Orders/entity/Order"}]}</script>
+<script type="application/json" id="plan-view">{"current":{"modules":[{"id":"Orders","name":"Orders","purpose":"Turns a customer's basket into an order and tracks it to completion.","depth":"mapped","sources":[],"usedBy":["Notifications"],"contracts":[{"id":"Orders/contract/Orders","name":"Orders","sources":[],"types":[{"id":"Orders/contract/Orders/type/OrderStatus","name":"OrderStatus","kind":"enum","values":["Placed","Cancelled"]},{"id":"Orders/contract/Orders/type/LineInput","name":"LineInput","kind":"record","fields":[{"name":"productId","type":[{"s":"uuid"}]},{"name":"quantity","type":[{"s":"int"}]}]},{"id":"Orders/contract/Orders/type/OrderLineView","name":"OrderLineView","kind":"record","fields":[{"name":"product","type":[{"s":"Catalog.ProductSummary","ref":"Catalog/contract/Catalog/type/ProductSummary"}]},{"name":"quantity","type":[{"s":"int"}]},{"name":"unitPrice","type":[{"s":"decimal"}]}]},{"id":"Orders/contract/Orders/type/OrderView","name":"OrderView","kind":"record","fields":[{"name":"id","type":[{"s":"uuid"}]},{"name":"status","type":[{"s":"OrderStatus","ref":"Orders/contract/Orders/type/OrderStatus"}]},{"name":"total","type":[{"s":"decimal"}]},{"name":"lines","type":[{"s":"OrderLineView","ref":"Orders/contract/Orders/type/OrderLineView"},{"s":"[]"}]}]}],"operations":[{"id":"Orders/contract/Orders/PlaceOrder","name":"PlaceOrder","mode":"command","input":[{"name":"customerId","type":[{"s":"uuid"}]},{"name":"lines","type":[{"s":"LineInput","ref":"Orders/contract/Orders/type/LineInput"},{"s":"[]"}]}],"output":[{"s":"OrderView","ref":"Orders/contract/Orders/type/OrderView"}],"errors":["EmptyOrder","UnknownProduct"]},{"id":"Orders/contract/Orders/CancelOrder","name":"CancelOrder","mode":"command","input":[{"name":"id","type":[{"s":"uuid"}]}],"output":null,"errors":["NotFound","AlreadyCancelled"]},{"id":"Orders/contract/Orders/GetOrder","name":"GetOrder","mode":"query","input":[{"name":"id","type":[{"s":"uuid"}]}],"output":[{"s":"OrderView","ref":"Orders/contract/Orders/type/OrderView"}],"errors":["NotFound"]},{"id":"Orders/contract/Orders/ListForCustomer","name":"ListForCustomer","mode":"query","input":[{"name":"customerId","type":[{"s":"uuid"}]}],"output":[{"s":"OrderView","ref":"Orders/contract/Orders/type/OrderView"},{"s":"[]"}],"errors":[]}],"events":[{"id":"Orders/contract/Orders/OrderPlaced","name":"OrderPlaced","payload":[{"name":"orderId","type":[{"s":"uuid"}]},{"name":"total","type":[{"s":"decimal"}]}]}]}],"aggregates":[{"id":"Orders/aggregate/Order","name":"Order","root":"Orders/entity/Order","members":["Orders/entity/OrderLine"],"invariants":["Total equals the sum of its lines.","Lines cannot change once the order is placed."]}],"entities":[{"id":"Orders/entity/Order","name":"Order","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"customerId","type":[{"s":"uuid"}],"key":false},{"name":"status","type":[{"s":"OrderStatus","ref":"Orders/contract/Orders/type/OrderStatus"}],"key":false},{"name":"total","type":[{"s":"decimal"}],"key":false},{"name":"placedAt","type":[{"s":"datetime"}],"key":false}],"indexes":[],"access":["get by key","find by customerId","save"],"stored":{"id":"Orders/store/orders db/Order","table":"orders","store":"orders db","engine":"postgres"}},{"id":"Orders/entity/OrderLine","name":"OrderLine","note":"Price is copied at order time; Catalog prices may change later.","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"orderId","type":[{"s":"uuid"}],"key":false},{"name":"productId","type":[{"s":"uuid"}],"key":false},{"name":"quantity","type":[{"s":"int"}],"key":false},{"name":"unitPrice","type":[{"s":"decimal"}],"key":false}],"indexes":[],"access":[],"stored":{"id":"Orders/store/orders db/OrderLine","table":"order_lines","store":"orders db","engine":"postgres"}}],"stores":[{"id":"Orders/store/orders db","name":"orders db","engine":"postgres","sources":[],"tables":[{"id":"Orders/store/orders db/Order","entity":"Orders/entity/Order","entityName":"Order","table":"orders","relational":true,"columns":[{"name":"id","type":"uuid","nullable":false,"key":true},{"name":"customerId","type":"uuid","nullable":false,"key":false},{"name":"status","type":"\"OrderStatus\"","nullable":false,"key":false},{"name":"total","type":"numeric(12,2)","nullable":false,"key":false},{"name":"placedAt","type":"timestamptz","nullable":false,"key":false}],"indexes":[{"name":"orders_customerId_idx","on":["customerId"],"unique":false,"serves":["Order: find by customerId"]}],"gsis":[],"keyServes":["Order: get by key"],"scans":[]},{"id":"Orders/store/orders db/OrderLine","entity":"Orders/entity/OrderLine","entityName":"OrderLine","table":"order_lines","relational":true,"columns":[{"name":"id","type":"uuid","nullable":false,"key":true},{"name":"orderId","type":"uuid","nullable":false,"key":false},{"name":"productId","type":"uuid","nullable":false,"key":false},{"name":"quantity","type":"integer","nullable":false,"key":false},{"name":"unitPrice","type":"numeric","nullable":false,"key":false}],"indexes":[{"name":"order_lines_orderId_idx","on":["orderId"],"unique":false,"serves":[]}],"gsis":[],"keyServes":[],"scans":[]}]}],"endpoints":[{"id":"Orders/endpoint/POST ∕orders","name":"POST /orders","protocol":"http","method":"POST","path":"/orders","auth":"customer session","audience":"public","sources":[],"calls":[{"label":"Orders.PlaceOrder","ref":"Orders/contract/Orders/PlaceOrder"}]},{"id":"Orders/endpoint/GET ∕orders∕{id}","name":"GET /orders/{id}","protocol":"http","method":"GET","path":"/orders/{id}","auth":"customer session","audience":"public","sources":[],"calls":[{"label":"Orders.GetOrder","ref":"Orders/contract/Orders/GetOrder"}]},{"id":"Orders/endpoint/POST ∕orders∕{id}∕cancel","name":"POST /orders/{id}/cancel","protocol":"http","method":"POST","path":"/orders/{id}/cancel","auth":"customer session","audience":"public","sources":[],"calls":[{"label":"Orders.CancelOrder","ref":"Orders/contract/Orders/CancelOrder"}]},{"id":"Orders/endpoint/GET ∕customers∕{customerId}∕orders","name":"GET /customers/{customerId}/orders","protocol":"http","method":"GET","path":"/customers/{customerId}/orders","auth":"customer session","audience":"public","sources":[],"calls":[{"label":"Orders.ListForCustomer","ref":"Orders/contract/Orders/ListForCustomer"}]}],"modules":[]},{"id":"Catalog","name":"Catalog","purpose":"Owns what can be sold and at what price.","depth":"mapped","sources":[],"usedBy":["Orders"],"contracts":[{"id":"Catalog/contract/Catalog","name":"Catalog","sources":[],"types":[{"id":"Catalog/contract/Catalog/type/ProductSummary","name":"ProductSummary","kind":"record","fields":[{"name":"id","type":[{"s":"uuid"}]},{"name":"name","type":[{"s":"string"}]},{"name":"price","type":[{"s":"decimal"}]}]}],"operations":[{"id":"Catalog/contract/Catalog/GetProduct","name":"GetProduct","mode":"query","input":[{"name":"id","type":[{"s":"uuid"}]}],"output":[{"s":"ProductSummary","ref":"Catalog/contract/Catalog/type/ProductSummary"}],"errors":["NotFound"]},{"id":"Catalog/contract/Catalog/ListActive","name":"ListActive","mode":"query","input":[],"output":[{"s":"ProductSummary","ref":"Catalog/contract/Catalog/type/ProductSummary"},{"s":"[]"}],"errors":[]}],"events":[{"id":"Catalog/contract/Catalog/ProductPriceChanged","name":"ProductPriceChanged","payload":[{"name":"productId","type":[{"s":"uuid"}]},{"name":"price","type":[{"s":"decimal"}]}]}]}],"aggregates":[],"entities":[{"id":"Catalog/entity/Product","name":"Product","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"sku","type":[{"s":"string"}],"key":false},{"name":"name","type":[{"s":"string"}],"key":false},{"name":"price","type":[{"s":"decimal"}],"key":false},{"name":"active","type":[{"s":"boolean"}],"key":false}],"indexes":[],"access":["get by key","find by sku","find by active","save"],"stored":{"id":"Catalog/store/catalog db/Product","table":"products","store":"catalog db","engine":"postgres"}}],"stores":[{"id":"Catalog/store/catalog db","name":"catalog db","engine":"postgres","sources":[],"tables":[{"id":"Catalog/store/catalog db/Product","entity":"Catalog/entity/Product","entityName":"Product","table":"products","relational":true,"columns":[{"name":"id","type":"uuid","nullable":false,"key":true},{"name":"sku","type":"text","nullable":false,"key":false},{"name":"name","type":"text","nullable":false,"key":false},{"name":"price","type":"numeric","nullable":false,"key":false},{"name":"active","type":"boolean","nullable":false,"key":false}],"indexes":[{"name":"products_sku_idx","on":["sku"],"unique":true,"serves":["Product: find by sku"]},{"name":"products_active_idx","on":["active"],"unique":false,"serves":["Product: find by active"]}],"gsis":[],"keyServes":["Product: get by key"],"scans":[]}]}],"endpoints":[],"modules":[]},{"id":"Customers","name":"Customers","purpose":"Accounts, addresses and sign-in.","depth":"stub","sources":["src/customers/"],"usedBy":["Orders"],"contracts":[{"id":"Customers/contract/Customers","name":"Customers","sources":[],"types":[],"operations":[],"events":[]}],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"modules":[]},{"id":"Notifications","name":"Notifications","purpose":"Emails and push messages to customers.","depth":"stub","sources":["src/notify/"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"modules":[]}],"edges":[{"from":"Orders/endpoint/POST ∕orders","to":"Orders/contract/Orders/PlaceOrder","kind":"route"},{"from":"Orders/endpoint/GET ∕orders∕{id}","to":"Orders/contract/Orders/GetOrder","kind":"route"},{"from":"Orders/endpoint/POST ∕orders∕{id}∕cancel","to":"Orders/contract/Orders/CancelOrder","kind":"route"},{"from":"Orders/endpoint/GET ∕customers∕{customerId}∕orders","to":"Orders/contract/Orders/ListForCustomer","kind":"route"},{"from":"Orders","to":"Catalog/contract/Catalog","kind":"call"},{"from":"Orders","to":"Customers/contract/Customers","kind":"call"},{"from":"Notifications","to":"Orders/contract/Orders","kind":"call"},{"from":"Orders/contract/Orders","to":"Notifications","kind":"event","label":"OrderPlaced"}],"diagnostics":[]},"proposed":{"modules":[{"id":"Orders","name":"Orders","purpose":"Turns a customer's basket into an order and tracks it to completion.","depth":"mapped","sources":[],"usedBy":["Notifications"],"contracts":[{"id":"Orders/contract/Orders","name":"Orders","sources":[],"types":[{"id":"Orders/contract/Orders/type/OrderStatus","name":"OrderStatus","kind":"enum","values":["AwaitingPayment","Paid","PaymentFailed","Cancelled"]},{"id":"Orders/contract/Orders/type/LineInput","name":"LineInput","kind":"record","fields":[{"name":"productId","type":[{"s":"uuid"}]},{"name":"quantity","type":[{"s":"int"}]}]},{"id":"Orders/contract/Orders/type/OrderLineView","name":"OrderLineView","kind":"record","fields":[{"name":"product","type":[{"s":"Catalog.ProductSummary","ref":"Catalog/contract/Catalog/type/ProductSummary"}]},{"name":"quantity","type":[{"s":"int"}]},{"name":"unitPrice","type":[{"s":"decimal"}]}]},{"id":"Orders/contract/Orders/type/OrderView","name":"OrderView","kind":"record","fields":[{"name":"id","type":[{"s":"uuid"}]},{"name":"status","type":[{"s":"OrderStatus","ref":"Orders/contract/Orders/type/OrderStatus"}]},{"name":"total","type":[{"s":"decimal"}]},{"name":"lines","type":[{"s":"OrderLineView","ref":"Orders/contract/Orders/type/OrderLineView"},{"s":"[]"}]}]}],"operations":[{"id":"Orders/contract/Orders/PlaceOrder","name":"PlaceOrder","mode":"command","input":[{"name":"customerId","type":[{"s":"uuid"}]},{"name":"lines","type":[{"s":"LineInput","ref":"Orders/contract/Orders/type/LineInput"},{"s":"[]"}]}],"output":[{"s":"OrderView","ref":"Orders/contract/Orders/type/OrderView"}],"errors":["EmptyOrder","UnknownProduct"]},{"id":"Orders/contract/Orders/CancelOrder","name":"CancelOrder","mode":"command","input":[{"name":"id","type":[{"s":"uuid"}]}],"output":null,"errors":["NotFound","AlreadyCancelled","AlreadyPaid"]},{"id":"Orders/contract/Orders/GetOrder","name":"GetOrder","mode":"query","input":[{"name":"id","type":[{"s":"uuid"}]}],"output":[{"s":"OrderView","ref":"Orders/contract/Orders/type/OrderView"}],"errors":["NotFound"]},{"id":"Orders/contract/Orders/ListForCustomer","name":"ListForCustomer","mode":"query","input":[{"name":"customerId","type":[{"s":"uuid"}]}],"output":[{"s":"OrderView","ref":"Orders/contract/Orders/type/OrderView"},{"s":"[]"}],"errors":[]}],"events":[{"id":"Orders/contract/Orders/OrderPlaced","name":"OrderPlaced","payload":[{"name":"orderId","type":[{"s":"uuid"}]},{"name":"total","type":[{"s":"decimal"}]}]},{"id":"Orders/contract/Orders/OrderPaid","name":"OrderPaid","payload":[{"name":"orderId","type":[{"s":"uuid"}]}]}]}],"aggregates":[{"id":"Orders/aggregate/Order","name":"Order","root":"Orders/entity/Order","members":["Orders/entity/OrderLine"],"invariants":["Total equals the sum of its lines.","Lines cannot change once the order is placed.","Status only moves forward: AwaitingPayment, then Paid or PaymentFailed."]}],"entities":[{"id":"Orders/entity/Order","name":"Order","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"customerId","type":[{"s":"uuid"}],"key":false},{"name":"status","type":[{"s":"OrderStatus","ref":"Orders/contract/Orders/type/OrderStatus"}],"key":false},{"name":"total","type":[{"s":"decimal"}],"key":false},{"name":"placedAt","type":[{"s":"datetime"}],"key":false},{"name":"paymentId","type":[{"s":"uuid"},{"s":"?"}],"key":false}],"indexes":[],"access":["get by key","find by customerId","save"],"stored":{"id":"Orders/store/orders db/Order","table":"orders","store":"orders db","engine":"postgres"}},{"id":"Orders/entity/OrderLine","name":"OrderLine","note":"Price is copied at order time; Catalog prices may change later.","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"orderId","type":[{"s":"uuid"}],"key":false},{"name":"productId","type":[{"s":"uuid"}],"key":false},{"name":"quantity","type":[{"s":"int"}],"key":false},{"name":"unitPrice","type":[{"s":"decimal"}],"key":false}],"indexes":[],"access":[],"stored":{"id":"Orders/store/orders db/OrderLine","table":"order_lines","store":"orders db","engine":"postgres"}}],"stores":[{"id":"Orders/store/orders db","name":"orders db","engine":"postgres","sources":[],"tables":[{"id":"Orders/store/orders db/Order","entity":"Orders/entity/Order","entityName":"Order","table":"orders","relational":true,"columns":[{"name":"id","type":"uuid","nullable":false,"key":true},{"name":"customerId","type":"uuid","nullable":false,"key":false},{"name":"status","type":"\"OrderStatus\"","nullable":false,"key":false},{"name":"total","type":"numeric(12,2)","nullable":false,"key":false},{"name":"placedAt","type":"timestamptz","nullable":false,"key":false},{"name":"paymentId","type":"uuid","nullable":true,"key":false}],"indexes":[{"name":"orders_customerId_idx","on":["customerId"],"unique":false,"serves":["Order: find by customerId"]}],"gsis":[],"keyServes":["Order: get by key"],"scans":[]},{"id":"Orders/store/orders db/OrderLine","entity":"Orders/entity/OrderLine","entityName":"OrderLine","table":"order_lines","relational":true,"columns":[{"name":"id","type":"uuid","nullable":false,"key":true},{"name":"orderId","type":"uuid","nullable":false,"key":false},{"name":"productId","type":"uuid","nullable":false,"key":false},{"name":"quantity","type":"integer","nullable":false,"key":false},{"name":"unitPrice","type":"numeric","nullable":false,"key":false}],"indexes":[{"name":"order_lines_orderId_idx","on":["orderId"],"unique":false,"serves":[]}],"gsis":[],"keyServes":[],"scans":[]}]}],"endpoints":[{"id":"Orders/endpoint/POST ∕orders","name":"POST /orders","protocol":"http","method":"POST","path":"/orders","auth":"customer session","audience":"public","sources":[],"calls":[{"label":"Orders.PlaceOrder","ref":"Orders/contract/Orders/PlaceOrder"}]},{"id":"Orders/endpoint/GET ∕orders∕{id}","name":"GET /orders/{id}","protocol":"http","method":"GET","path":"/orders/{id}","auth":"customer session","audience":"public","sources":[],"calls":[{"label":"Orders.GetOrder","ref":"Orders/contract/Orders/GetOrder"}]},{"id":"Orders/endpoint/POST ∕orders∕{id}∕cancel","name":"POST /orders/{id}/cancel","protocol":"http","method":"POST","path":"/orders/{id}/cancel","auth":"customer session","audience":"public","sources":[],"calls":[{"label":"Orders.CancelOrder","ref":"Orders/contract/Orders/CancelOrder"}]},{"id":"Orders/endpoint/GET ∕customers∕{customerId}∕orders","name":"GET /customers/{customerId}/orders","protocol":"http","method":"GET","path":"/customers/{customerId}/orders","auth":"customer session","audience":"public","sources":[],"calls":[{"label":"Orders.ListForCustomer","ref":"Orders/contract/Orders/ListForCustomer"}]},{"id":"Orders/endpoint/GET ∕orders∕{id}∕payment","name":"GET /orders/{id}/payment","protocol":"http","method":"GET","path":"/orders/{id}/payment","auth":"customer session","audience":"public","sources":[],"calls":[{"label":"Payments.GetStatus","ref":"Payments/contract/Payments/GetStatus"}]}],"modules":[]},{"id":"Catalog","name":"Catalog","purpose":"Owns what can be sold and at what price.","depth":"mapped","sources":[],"usedBy":["Orders"],"contracts":[{"id":"Catalog/contract/Catalog","name":"Catalog","sources":[],"types":[{"id":"Catalog/contract/Catalog/type/ProductSummary","name":"ProductSummary","kind":"record","fields":[{"name":"id","type":[{"s":"uuid"}]},{"name":"name","type":[{"s":"string"}]},{"name":"price","type":[{"s":"decimal"}]}]}],"operations":[{"id":"Catalog/contract/Catalog/GetProduct","name":"GetProduct","mode":"query","input":[{"name":"id","type":[{"s":"uuid"}]}],"output":[{"s":"ProductSummary","ref":"Catalog/contract/Catalog/type/ProductSummary"}],"errors":["NotFound"]},{"id":"Catalog/contract/Catalog/ListActive","name":"ListActive","mode":"query","input":[],"output":[{"s":"ProductSummary","ref":"Catalog/contract/Catalog/type/ProductSummary"},{"s":"[]"}],"errors":[]}],"events":[{"id":"Catalog/contract/Catalog/ProductPriceChanged","name":"ProductPriceChanged","payload":[{"name":"productId","type":[{"s":"uuid"}]},{"name":"price","type":[{"s":"decimal"}]}]}]}],"aggregates":[],"entities":[{"id":"Catalog/entity/Product","name":"Product","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"sku","type":[{"s":"string"}],"key":false},{"name":"name","type":[{"s":"string"}],"key":false},{"name":"price","type":[{"s":"decimal"}],"key":false},{"name":"active","type":[{"s":"boolean"}],"key":false}],"indexes":[],"access":["get by key","find by sku","find by active","save"],"stored":{"id":"Catalog/store/catalog db/Product","table":"products","store":"catalog db","engine":"postgres"}}],"stores":[{"id":"Catalog/store/catalog db","name":"catalog db","engine":"postgres","sources":[],"tables":[{"id":"Catalog/store/catalog db/Product","entity":"Catalog/entity/Product","entityName":"Product","table":"products","relational":true,"columns":[{"name":"id","type":"uuid","nullable":false,"key":true},{"name":"sku","type":"text","nullable":false,"key":false},{"name":"name","type":"text","nullable":false,"key":false},{"name":"price","type":"numeric","nullable":false,"key":false},{"name":"active","type":"boolean","nullable":false,"key":false}],"indexes":[{"name":"products_sku_idx","on":["sku"],"unique":true,"serves":["Product: find by sku"]},{"name":"products_active_idx","on":["active"],"unique":false,"serves":["Product: find by active"]}],"gsis":[],"keyServes":["Product: get by key"],"scans":[]}]}],"endpoints":[],"modules":[]},{"id":"Payments","name":"Payments","purpose":"Collects money for an order and reports the outcome. Knows nothing about what was bought.","depth":"mapped","sources":[],"usedBy":["Orders"],"contracts":[{"id":"Payments/contract/Payments","name":"Payments","sources":[],"types":[{"id":"Payments/contract/Payments/type/PaymentStatus","name":"PaymentStatus","kind":"enum","values":["Pending","Captured","Failed"]}],"operations":[{"id":"Payments/contract/Payments/StartPayment","name":"StartPayment","mode":"command","input":[{"name":"orderId","type":[{"s":"uuid"}]},{"name":"amount","type":[{"s":"decimal"}]}],"output":[{"s":"uuid"}],"errors":["AlreadyPaid"]},{"id":"Payments/contract/Payments/GetStatus","name":"GetStatus","mode":"query","input":[{"name":"orderId","type":[{"s":"uuid"}]}],"output":[{"s":"PaymentStatus","ref":"Payments/contract/Payments/type/PaymentStatus"}],"errors":["NotFound"]}],"events":[{"id":"Payments/contract/Payments/PaymentCaptured","name":"PaymentCaptured","payload":[{"name":"paymentId","type":[{"s":"uuid"}]},{"name":"orderId","type":[{"s":"uuid"}]}]},{"id":"Payments/contract/Payments/PaymentFailed","name":"PaymentFailed","payload":[{"name":"orderId","type":[{"s":"uuid"}]},{"name":"reason","type":[{"s":"string"}]}]}]}],"aggregates":[],"entities":[{"id":"Payments/entity/Payment","name":"Payment","sources":[],"fields":[{"name":"id","type":[{"s":"uuid"}],"key":true},{"name":"orderId","type":[{"s":"uuid"}],"key":false},{"name":"amount","type":[{"s":"decimal"}],"key":false},{"name":"status","type":[{"s":"PaymentStatus","ref":"Payments/contract/Payments/type/PaymentStatus"}],"key":false},{"name":"providerRef","type":[{"s":"string"},{"s":"?"}],"key":false},{"name":"createdAt","type":[{"s":"datetime"}],"key":false}],"indexes":[],"access":["get by key","find by orderId","save"],"stored":{"id":"Payments/store/payments table/Payment","table":"payments","store":"payments table","engine":"dynamodb"}}],"stores":[{"id":"Payments/store/payments table","name":"payments table","engine":"dynamodb","note":"Single-table design: one item per payment, found by order through the byOrder index.","sources":[],"tables":[{"id":"Payments/store/payments table/Payment","entity":"Payments/entity/Payment","entityName":"Payment","table":"payments","relational":false,"columns":[],"indexes":[],"pk":"PAY#{id}","gsis":[{"name":"byOrder","pk":"ORDER#{orderId}","sk":"AT#{createdAt}","serves":["Payment: find by orderId"]}],"keyServes":["Payment: get by key"],"scans":[]}]}],"endpoints":[],"modules":[{"id":"Payments/Gateway","name":"Gateway","purpose":"Talks to the card provider. One implementation per provider; nothing outside Payments sees it.","depth":"mapped","sources":[],"usedBy":["Payments"],"contracts":[{"id":"Payments/Gateway/contract/Gateway","name":"Gateway","sources":[],"types":[],"operations":[{"id":"Payments/Gateway/contract/Gateway/Charge","name":"Charge","mode":"command","input":[{"name":"amount","type":[{"s":"decimal"}]},{"name":"reference","type":[{"s":"string"}]}],"output":[{"s":"string"}],"errors":["Declined","ProviderDown"]}],"events":[]}],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"modules":[]}]},{"id":"Customers","name":"Customers","purpose":"Accounts, addresses and sign-in.","depth":"stub","sources":["src/customers/"],"usedBy":["Orders"],"contracts":[{"id":"Customers/contract/Customers","name":"Customers","sources":[],"types":[],"operations":[],"events":[]}],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"modules":[]},{"id":"Notifications","name":"Notifications","purpose":"Emails and push messages to customers.","depth":"stub","sources":["src/notify/"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"modules":[]}],"edges":[{"from":"Orders/endpoint/POST ∕orders","to":"Orders/contract/Orders/PlaceOrder","kind":"route"},{"from":"Orders/endpoint/GET ∕orders∕{id}","to":"Orders/contract/Orders/GetOrder","kind":"route"},{"from":"Orders/endpoint/POST ∕orders∕{id}∕cancel","to":"Orders/contract/Orders/CancelOrder","kind":"route"},{"from":"Orders/endpoint/GET ∕customers∕{customerId}∕orders","to":"Orders/contract/Orders/ListForCustomer","kind":"route"},{"from":"Orders/endpoint/GET ∕orders∕{id}∕payment","to":"Payments/contract/Payments/GetStatus","kind":"route"},{"from":"Orders","to":"Catalog/contract/Catalog","kind":"call"},{"from":"Orders","to":"Payments/contract/Payments","kind":"call"},{"from":"Payments/contract/Payments","to":"Orders","kind":"event","label":"PaymentCaptured, PaymentFailed"},{"from":"Orders","to":"Customers/contract/Customers","kind":"call"},{"from":"Payments","to":"Payments/Gateway/contract/Gateway","kind":"call"},{"from":"Notifications","to":"Orders/contract/Orders","kind":"call"},{"from":"Orders/contract/Orders","to":"Notifications","kind":"event","label":"OrderPlaced"}],"diagnostics":[]},"changes":[{"module":"Payments","tag":"additive","what":"new module: Collects money for an order and reports the outcome. Knows nothing about what was bought.","short":"new module","node":"Payments"},{"module":"Orders","tag":"migration","what":"Order: add column paymentId: uuid?","short":"add column paymentId: uuid?","node":"Orders/entity/Order"},{"module":"Orders","tag":"internal","what":"Order: new invariant: Status only moves forward: AwaitingPayment, then Paid or PaymentFailed.","short":"new invariant: Status only moves forward: AwaitingPayment, then Paid or PaymentFailed.","node":"Orders/aggregate/Order"},{"module":"Orders","tag":"additive","what":"new endpoint GET /orders/{id}/payment","short":"new endpoint","node":"Orders/endpoint/GET ∕orders∕{id}∕payment"},{"module":"Orders","tag":"internal","what":"now depends on Payments","node":"Orders"},{"module":"Orders","tag":"internal","what":"now reacts to Payments.PaymentCaptured","node":"Orders"},{"module":"Orders","tag":"internal","what":"now reacts to Payments.PaymentFailed","node":"Orders"},{"module":"Orders","tag":"breaking","what":"Orders: OrderStatus gains value \"AwaitingPayment\" (exhaustive switches must handle it)","short":"gains value \"AwaitingPayment\" (exhaustive switches must handle it)","contract":"Orders","node":"Orders/contract/Orders/type/OrderStatus"},{"module":"Orders","tag":"breaking","what":"Orders: OrderStatus gains value \"Paid\" (exhaustive switches must handle it)","short":"gains value \"Paid\" (exhaustive switches must handle it)","contract":"Orders","node":"Orders/contract/Orders/type/OrderStatus"},{"module":"Orders","tag":"breaking","what":"Orders: OrderStatus gains value \"PaymentFailed\" (exhaustive switches must handle it)","short":"gains value \"PaymentFailed\" (exhaustive switches must handle it)","contract":"Orders","node":"Orders/contract/Orders/type/OrderStatus"},{"module":"Orders","tag":"breaking","what":"Orders: OrderStatus loses value \"Placed\"","short":"loses value \"Placed\"","contract":"Orders","node":"Orders/contract/Orders/type/OrderStatus"},{"module":"Orders","tag":"breaking","what":"Orders: CancelOrder: can now fail with AlreadyPaid","short":"can now fail with AlreadyPaid","contract":"Orders","node":"Orders/contract/Orders/CancelOrder"},{"module":"Orders","tag":"additive","what":"Orders: new event OrderPaid","short":"new event","contract":"Orders","node":"Orders/contract/Orders/OrderPaid"},{"module":"Orders","tag":"migration","what":"Order.status: rows with \"Placed\" must be mapped to a new OrderStatus","short":"status: rows with \"Placed\" must be mapped to a new OrderStatus","node":"Orders/entity/Order"},{"module":"Orders","tag":"migration","what":"Order.status: database enum gains \"AwaitingPayment\", \"Paid\", \"PaymentFailed\"","short":"status: database enum gains \"AwaitingPayment\", \"Paid\", \"PaymentFailed\"","node":"Orders/entity/Order"}]}</script>
 <script>
 // In-page renderer for a plan document. Reads #plan-doc and #plan-view and
 // draws the standard layout. No dependencies, no network.
@@ -379,8 +617,10 @@ open questions:
     pos: loadPos(),            // module id -> card centre, in canvas units
     view: { x: 0, y: 0, k: 1 }, // pan and zoom of the canvas
     fitted: false,
-    ctxOpen: new Set(),        // which context sections below the canvas are open
+    ctxOpen: new Set(["questions"]), // which context sections below the canvas are open
+    only: null,                // show only changes with this tag
   };
+  const GLOSSARY = doc.glossary || [];
 
   // ---- DOM helpers ------------------------------------------------------------
   const SVG = "http://www.w3.org/2000/svg";
@@ -413,6 +653,8 @@ open questions:
       }
       for (const e of m.entities) out.add(e.id);
       for (const a of m.aggregates) out.add(a.id);
+      for (const st of m.stores) { out.add(st.id); for (const tb of st.tables) out.add(tb.id); }
+      for (const ep of m.endpoints) out.add(ep.id);
     }
     return out;
   }
@@ -420,7 +662,7 @@ open questions:
   // A change is shown on the deepest node that exists in the tree being drawn.
   function placeOf(change, ids) {
     let id = change.node;
-    while (id && !ids.has(id)) id = id.includes("/") ? id.slice(0, id.lastIndexOf("/")).replace(/\/(contract|entity|type|aggregate)$/, "") : null;
+    while (id && !ids.has(id)) id = id.includes("/") ? id.slice(0, id.lastIndexOf("/")).replace(/\/(contract|entity|type|aggregate|store|endpoint)$/, "") : null;
     return id || change.module;
   }
 
@@ -440,6 +682,7 @@ open questions:
     for (const c of view.changes) {
       if (nodes && !changeInPhase(c, nodes)) continue;
       if (c.tag === "internal") continue; // drawn as new wires instead
+      if (state.only && c.tag !== state.only) continue;
       const p = placeOf(c, ids);
       if (!map.has(p)) map.set(p, []);
       map.get(p).push(c);
@@ -472,6 +715,12 @@ open questions:
   function reveal(ref) {
     const typeAt = ref.indexOf("/type/");
     if (typeAt >= 0) state.open.add(ref.slice(0, typeAt));
+    const parts = ref.split("/");
+    for (let i = 2; i <= parts.length; i++) state.open.add(parts.slice(0, i).join("/"));
+    // A table opens inside its store; an endpoint may sit past the fold.
+    const store = ref.match(/^(.*\/store\/[^/]+)\//);
+    if (store) state.open.add(store[1]);
+    if (ref.includes("/endpoint/")) state.open.add(ref.split("/endpoint/")[0] + "/endpoints");
     state.open.add(ref);
     state.selected = ref;
     render();
@@ -489,20 +738,35 @@ open questions:
     drawWires();
   }
   // "Orders/contract/Orders/CancelOrder" reads as "Orders › CancelOrder".
-  const pretty = (id) => id.split(/\/(?:contract|entity|type|aggregate)\/|\//)
-    .filter((p, i, xs) => p !== xs[i - 1]).join(" › ");
+  const pretty = (id) => id.split(/\/(?:contract|entity|type|aggregate|store|endpoint)\/|\//)
+    .filter((p, i, xs) => p !== xs[i - 1]).join(" › ").replace(/\u2215/g, "/");
+
+  // When something is selected, the cards it has nothing to do with step back.
+  function focusSet() {
+    const sel = state.selected;
+    if (!sel) return null;
+    const top = (id) => id.split("/")[0];
+    const out = new Set([top(sel)]);
+    for (const e of tree().edges) {
+      if (under(e.from, sel) || under(e.to, sel) || under(sel, e.to)) { out.add(top(e.from)); out.add(top(e.to)); }
+    }
+    return out;
+  }
+  const filteredOut = (id, ctx) => state.tab === "change" && state.only && !allChangesIn(id, ctx).length;
 
   // ---- canvas -------------------------------------------------------------------
   function canvas() {
     const t = tree();
-    const ctx = { placed: changesByPlace() };
+    const ctx = { placed: changesByPlace(), focus: focusSet() };
     const tool = (label, title, fn) => h("button", { class: "tool", title, "aria-label": title, onclick: fn }, label);
     const legend = h("div", { class: "legend" },
       h("span", { class: "lg-call" }, "calls"), h("span", { class: "lg-event" }, "reacts to event"),
       h("span", { class: "lg-type" }, "uses type"),
+      h("span", { class: "lg-route" }, "endpoint calls (on hover)"),
       state.tab === "change" ? h("span", { class: "lg-new" }, "new dependency") : null,
       state.tab === "change" ? TAGS.slice(0, 3).map((x) => h("span", { class: `lg-tag ${x}` }, x)) : null,
-      h("span", { class: "hint" }, "drag cards · drag the background to pan · ctrl + scroll to zoom"));
+      h("span", { class: "hint" }, h("kbd", {}, "/"), " search ", h("kbd", {}, "esc"), " clear ", h("kbd", {}, "f"), " fit ",
+        doc.slices.length ? [h("kbd", {}, `1–${doc.slices.length}`), " phases "] : null, "· drag to pan · ctrl + scroll to zoom"));
     const viewport = h("div", { class: "viewport", id: "viewport" },
       h("div", { class: "layer", id: "layer", style: layerTransform() },
         // Dependencies run under the cards; type links run over them, since
@@ -630,6 +894,21 @@ open questions:
       }
     }
   }
+  // Sources and notes stay one or two lines until clicked, so real code with
+  // long paths does not push a card's contracts off screen.
+  function srcLine(list) {
+    if (!list.length) return null;
+    if (list.length === 1) return h("p", { class: "src" }, list[0]);
+    return h("details", { class: "src", onclick: (ev) => ev.stopPropagation() },
+      h("summary", {}, `${list[0]} +${list.length - 1}`),
+      ...list.slice(1).map((x) => h("div", {}, x)));
+  }
+  function noteLine(text) {
+    if (!text) return null;
+    return h("p", { class: "note clamp", title: "Click to read all",
+      onclick: (ev) => { ev.stopPropagation(); ev.currentTarget.classList.toggle("clamp"); drawWires(); } }, text);
+  }
+
   const clamp = (v, m) => Math.max(-m, Math.min(m, v));
   function place(n) {
     n.el.style.left = `${n.x - n.w / 2}px`;
@@ -743,29 +1022,57 @@ open questions:
       h("li", { class: c.tag }, h("span", { class: `tag ${c.tag}` }, c.tag), c.short || c.what)));
   }
 
+  // "2 breaking · 1 migration", as coloured counts, for a card's header.
+  function tally(cs) {
+    const counts = TAGS.slice(0, 3).map((t) => [t, cs.filter((c) => c.tag === t).length]).filter(([, n]) => n);
+    if (!counts.length) return null;
+    return h("span", { class: "tally", title: counts.map(([t, n]) => `${n} ${t}`).join(", ") },
+      counts.map(([t, n]) => h("span", { class: `dot ${t}` }, String(n))));
+  }
+
   const facts = (id) => (doc.facts[id] || []).map((f) =>
     h("span", { class: "fact", title: f.detail || "" }, `${f.label} `, h("b", {}, String(f.value))));
 
+  // A card is read top to bottom in the order a request travels: how you get
+  // in (endpoints), what it promises (contracts), what it keeps (data), where
+  // that lives (storage), and what is inside it (sub-modules).
   function moduleCard(m, ctx, close) {
     const cs = ctx.placed.get(m.id);
-    const tagged = state.tab === "change" ? worst(allChangesIn(m.id, ctx)) : null;
+    const all = state.tab === "change" ? allChangesIn(m.id, ctx) : [];
+    const tagged = worst(all);
+    const focus = ctx.focus;
+    const loose = m.entities.filter((e) => !m.aggregates.some((a) => a.root === e.id || a.members.includes(e.id)));
     return h("article", {
       class: cls("card", m.depth === "stub" && "stub", tagged && tagged !== "internal" && `tag-${tagged}`,
-        !nodeInPhase(m.id) && "dim", state.selected === m.id && "selected"),
+        (!nodeInPhase(m.id) || filteredOut(m.id, ctx)) && "dim", !close && focus && !focus.has(m.id) && "unfocused",
+        state.selected === m.id && "selected"),
       "data-node-id": m.id,
     },
       h("header", { class: "card-head", onclick: () => select(m.id) },
-        h("div", { class: "title" }, h("span", { class: "name" }, m.name), m.depth === "stub" ? h("span", { class: "badge" }, "not mapped") : null, facts(m.id),
+        h("div", { class: "title" },
+          h("span", { class: "name" }, m.name),
+          m.depth === "stub" ? h("span", { class: "badge" }, "not mapped") : null,
+          tally(all),
           close ? h("button", { class: "x", "aria-label": `Close ${m.name}`, onclick: (ev) => { ev.stopPropagation(); close(); } }, "×") : null),
-        h("p", { class: "purpose" }, m.purpose),
-        m.sources.length ? h("p", { class: "src" }, m.sources.join(" · ")) : null,
-        m.note ? h("p", { class: "note" }, m.note) : null,
+        h("p", { class: "purpose" }, terms(m.purpose)),
+        facts(m.id).length ? h("div", { class: "facts" }, facts(m.id)) : null,
+        noteLine(m.note),
+        srcLine(m.sources),
         reactsTo(m),
         changeList(cs)),
-      m.contracts.map((c) => contractRow(m, c, ctx)),
-      m.aggregates.map((a) => aggregateBox(m, a, ctx)),
-      m.entities.filter((e) => !m.aggregates.some((a) => a.root === e.id || a.members.includes(e.id))).map((e) => entityRow(e, ctx)),
-      m.modules.map((sub) => subModule(sub, ctx)));
+      group("endpoints", "Endpoints", m.endpoints.length, endpointList(m, ctx)),
+      group("contracts", "Contracts", m.contracts.length, m.contracts.map((c) => contractRow(m, c, ctx))),
+      group("data", "Data", m.entities.length, m.aggregates.map((a) => aggregateBox(m, a, ctx)), loose.map((e) => entityRow(e, ctx))),
+      group("storage", "Storage", m.stores.reduce((n, st) => n + st.tables.length, 0), m.stores.map((st) => storeBox(st, ctx))),
+      group("inside", "Inside", m.modules.length, m.modules.map((sub) => subModule(sub, ctx))));
+  }
+
+  // A labelled band inside a card, coloured by the kind of thing it holds.
+  function group(kind, label, count, ...rows) {
+    if (!count) return null;
+    return h("section", { class: `group k-${kind}` },
+      h("div", { class: "group-label" }, h("span", {}, label), h("span", { class: "group-count" }, String(count))),
+      rows);
   }
 
   // An aggregate is drawn as a boundary around the tables it holds, with the
@@ -773,13 +1080,13 @@ open questions:
   function aggregateBox(m, a, ctx) {
     const open = state.open.has(a.id);
     const byId = new Map(m.entities.map((e) => [e.id, e]));
-    return h("section", { class: cls("aggregate", open && "open", state.selected === a.id && "selected", !nodeInPhase(a.id) && "dim"), "data-node-id": a.id },
+    return h("section", { class: cls("aggregate", open && "open", state.selected === a.id && "selected", (!nodeInPhase(a.id) || filteredOut(a.id, ctx)) && "dim"), "data-node-id": a.id },
       h("button", { class: "agg-head", "aria-expanded": String(open), onclick: () => toggle(a.id) },
         h("span", { class: "agg-label" }, `${a.name} aggregate`),
-        a.invariants.length ? h("span", { class: "meta" }, `${a.invariants.length} invariant${a.invariants.length === 1 ? "" : "s"}`) : null,
+        a.invariants.length ? h("span", { class: "meta" }, `${a.invariants.length} rule${a.invariants.length === 1 ? "" : "s"}`) : null,
         h("span", { class: "chev", "aria-hidden": "true" }, "›")),
       changeList(ctx.placed.get(a.id)),
-      open && a.invariants.length ? h("ul", { class: "invariants" }, a.invariants.map((i) => h("li", {}, i))) : null,
+      open && a.invariants.length ? h("ol", { class: "invariants" }, a.invariants.map((i) => h("li", {}, terms(i)))) : null,
       [a.root, ...a.members].map((id) => byId.get(id)).filter(Boolean).map((e) => entityRow(e, ctx, e.id === a.root)));
   }
 
@@ -787,11 +1094,8 @@ open questions:
   function subModule(sub, ctx) {
     const open = state.open.has(sub.id);
     if (open) return h("div", { class: "nested" }, moduleCard(sub, ctx, () => toggle(sub.id)));
-    const t = state.tab === "change" ? worst(allChangesIn(sub.id, ctx)) : null;
-    return h("section", { class: cls("row", "sub", state.selected === sub.id && "selected", !nodeInPhase(sub.id) && "dim"), "data-node-id": sub.id },
-      h("button", { class: cls("row-head", t && t !== "internal" && `mark-${t}`), "aria-expanded": "false", onclick: () => toggle(sub.id) },
-        boxIcon(), h("span", { class: "row-name" }, sub.name), h("span", { class: "meta" }, "inside"), facts(sub.id),
-        h("span", { class: "chev", "aria-hidden": "true" }, "›")));
+    return h("section", { class: cls("row", "sub", state.selected === sub.id && "selected", (!nodeInPhase(sub.id) || filteredOut(sub.id, ctx)) && "dim"), "data-node-id": sub.id },
+      rowHead(sub.id, boxIcon(), sub.name, sub.depth === "stub" ? "not mapped" : terms(sub.purpose), ctx, "sub-purpose"));
   }
 
   // Events are the one relationship a wire can't label legibly, so the
@@ -799,8 +1103,9 @@ open questions:
   function reactsTo(m) {
     const evs = tree().edges.filter((e) => e.kind === "event" && e.to === m.id);
     if (!evs.length) return null;
-    return h("p", { class: "listens" }, "on ", evs.map((e, i) => [i ? "; " : "", h("button", {
-      class: "linklike quiet", onclick: (ev) => { ev.stopPropagation(); reveal(e.from); } }, e.from.split("/").pop()), " ", e.label]));
+    return h("div", { class: "listens" }, h("span", { class: "listens-label" }, "reacts to"),
+      evs.map((e) => [h("button", { class: "linklike quiet", onclick: (ev) => { ev.stopPropagation(); reveal(e.from); } }, e.from.split("/").pop()),
+        e.label.split(", ").map((x) => h("span", { class: "ev" }, x))]));
   }
 
   function allChangesIn(id, ctx) {
@@ -809,35 +1114,49 @@ open questions:
     return out;
   }
 
-  function rowHead(id, icon, label, meta, ctx) {
+  function rowHead(id, icon, label, meta, ctx, metaClass) {
     const t = state.tab === "change" ? worst(allChangesIn(id, ctx)) : null;
     return h("button", {
       class: cls("row-head", t && t !== "internal" && `mark-${t}`), "aria-expanded": String(state.open.has(id)),
       onclick: () => toggle(id),
-    }, icon, h("span", { class: "row-name" }, label), meta ? h("span", { class: "meta" }, meta) : null, facts(id),
+    }, icon, h("span", { class: "row-name" }, label), meta ? h("span", { class: cls("meta", metaClass) }, meta) : null,
+    (doc.facts[id] || []).length ? h("span", { class: "has-facts", title: doc.facts[id].map((f) => `${f.label}: ${f.value}`).join("\n") }, "#") : null,
     h("span", { class: "chev", "aria-hidden": "true" }, "›"));
   }
+  const rowClass = (id, ctx, open, ...more) =>
+    cls("row", open && "open", (!nodeInPhase(id) || filteredOut(id, ctx)) && "dim", state.selected === id && "selected", ...more);
 
   function contractRow(m, c, ctx) {
     const open = state.open.has(c.id) && m.depth === "mapped";
     const n = c.operations.length + c.events.length;
-    return h("section", { class: cls("row", open && "open", !nodeInPhase(c.id) && "dim", state.selected === c.id && "selected"), "data-node-id": c.id },
-      rowHead(c.id, hex(), c.name, m.depth === "stub" ? "not mapped" : `${n} member${n === 1 ? "" : "s"}`, ctx),
+    return h("section", { class: rowClass(c.id, ctx, open), "data-node-id": c.id },
+      rowHead(c.id, hex(), c.name, m.depth === "stub" ? "not mapped" : `${c.operations.length} op${c.operations.length === 1 ? "" : "s"}${c.events.length ? ` · ${c.events.length} event${c.events.length === 1 ? "" : "s"}` : ""}`, ctx),
       changeList(ctx.placed.get(c.id)),
       open ? h("div", { class: "row-body" },
-        c.note ? h("p", { class: "note" }, c.note) : null,
-        c.sources.length ? h("p", { class: "src" }, c.sources.join(" · ")) : null,
+        facts(c.id).length ? h("div", { class: "facts" }, facts(c.id)) : null,
+        noteLine(c.note),
+        srcLine(c.sources),
         c.operations.map((o) => member(o.id, h("span", { class: `mode ${o.mode}` }, o.mode === "command" ? "cmd" : "query"),
-          [h("span", { class: "mname" }, o.name), "(", fieldsInline(o.input), ")", " → ", o.output ? tokens(o.output) : h("span", { class: "muted" }, "void")],
-          o.errors.length ? h("div", { class: "errs" }, "fails with ", o.errors.join(", ")) : null, ctx)),
+          [h("span", { class: "mname" }, o.name), "(", fieldsInline(o.input), ")", h("span", { class: "arrow" }, " → "), o.output ? tokens(o.output) : h("span", { class: "muted" }, "void")],
+          [o.errors.length ? h("div", { class: "errs" }, o.errors.map((e) => h("span", { class: "err" }, e))) : null, callers(o.id)], ctx)),
         c.events.map((e) => member(e.id, h("span", { class: "mode event" }, "event"),
           [h("span", { class: "mname" }, e.name), " { ", fieldsInline(e.payload), " }"], null, ctx)),
         typeShelf(c, ctx)) : null);
   }
 
+  // Which endpoints reach an operation, so a reader sees how it is called.
+  function callers(opId) {
+    const eps = tree().edges.filter((e) => e.kind === "route" && e.to === opId);
+    if (!eps.length) return null;
+    return h("div", { class: "callers" }, h("span", { class: "muted" }, "called by "), eps.map((e) =>
+      h("button", { class: "ep-chip", onclick: (ev) => { ev.stopPropagation(); reveal(e.from); },
+        onmouseenter: () => hover(e.from), onmouseleave: () => hover(null) }, endpointLabel(e.from))));
+  }
+  const endpointLabel = (id) => id.split("/endpoint/")[1].replace(/∕/g, "/");
+
   function member(id, badge, sig, extra, ctx) {
-    return h("div", { class: cls("member", state.selected === id && "selected", !nodeInPhase(id) && "dim"), "data-node-id": id,
-      onclick: (ev) => { if (!ev.target.closest(".chip")) select(id); } },
+    return h("div", { class: cls("member", state.selected === id && "selected", (!nodeInPhase(id) || filteredOut(id, ctx)) && "dim"), "data-node-id": id,
+      onclick: (ev) => { if (!ev.target.closest(".chip, .ep-chip")) select(id); } },
     h("div", { class: "sig" }, badge, " ", sig), extra, changeList(ctx.placed.get(id)));
   }
 
@@ -848,11 +1167,11 @@ open questions:
     const closed = c.types.filter((t) => !state.open.has(t.id));
     return h("div", { class: "types" },
       c.types.filter((t) => state.open.has(t.id)).map((t) => typeCard(t, ctx)),
-      closed.length ? h("div", { class: "type-chips" }, h("span", { class: "muted" }, "types "), closed.map((t) => chip({ s: t.name, ref: t.id }))) : null);
+      closed.length ? h("div", { class: "type-chips" }, h("span", { class: "muted" }, "types "), closed.map((t) => chip({ s: t.name, ref: t.id }, ctx))) : null);
   }
 
   function typeCard(t, ctx) {
-    return h("div", { class: cls("typecard", state.selected === t.id && "selected", !nodeInPhase(t.id) && "dim"), "data-node-id": t.id },
+    return h("div", { class: cls("typecard", state.selected === t.id && "selected", (!nodeInPhase(t.id) || filteredOut(t.id, ctx)) && "dim"), "data-node-id": t.id },
       h("div", { class: "type-head" },
         h("button", { class: "type-name", onclick: () => select(t.id) }, t.name, h("span", { class: "muted" }, t.kind === "enum" ? " one of" : "")),
         h("button", { class: "x", "aria-label": `Close ${t.name}`, onclick: () => { state.open.delete(t.id); render(); } }, "×")),
@@ -864,17 +1183,126 @@ open questions:
 
   function entityRow(e, ctx, root) {
     const open = state.open.has(e.id);
-    return h("section", { class: cls("row", open && "open", !nodeInPhase(e.id) && "dim", state.selected === e.id && "selected"), "data-node-id": e.id },
-      rowHead(e.id, cyl(), e.name, `${root ? "root · " : ""}${e.fields.length} fields`, ctx),
+    return h("section", { class: rowClass(e.id, ctx, open), "data-node-id": e.id },
+      rowHead(e.id, cyl(), e.name, [root ? h("span", { class: "root" }, "root") : null, `${e.fields.length} fields`], ctx),
       changeList(ctx.placed.get(e.id)),
       open ? h("div", { class: "row-body" },
-        e.note ? h("p", { class: "note" }, e.note) : null,
-        e.sources.length ? h("p", { class: "src" }, e.sources.join(" · ")) : null,
+        facts(e.id).length ? h("div", { class: "facts" }, facts(e.id)) : null,
+        noteLine(e.note),
+        srcLine(e.sources),
         h("div", { class: "fields" }, e.fields.map((f) =>
           h("div", {}, h("span", { class: "fname" }, f.name), ": ", tokens(f.type), f.key ? h("span", { class: "key" }, "key") : null))),
-        e.indexes.length ? h("p", { class: "aux" }, "indexed on ", e.indexes.join("; ")) : null,
-        e.access.length ? h("p", { class: "aux" }, "accessed by ", e.access.join(", ")) : null) : null);
+        e.access.length ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "read by "), e.access.map((a) => h("span", { class: "pill" }, a))) : null,
+        e.stored
+          ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "stored in "),
+            h("button", { class: "store-link", onclick: (ev) => { ev.stopPropagation(); reveal(e.stored.id); } },
+              engineBadge(e.stored.engine), ` ${e.stored.table}`))
+          : e.indexes.length ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "indexed on "), e.indexes.join("; ")) : null) : null);
   }
+
+  // ---- endpoints ----------------------------------------------------------------
+  // The first few are listed; the rest fold away, except ones the change touches.
+  function endpointList(m, ctx) {
+    if (!m.endpoints.length) return null;
+    const LIMIT = 5;
+    const key = `${m.id}/endpoints`;
+    const touched = (ep) => allChangesIn(ep.id, ctx).length > 0;
+    const sorted = [...m.endpoints].sort((a, b) => Number(touched(b)) - Number(touched(a)));
+    const all = state.open.has(key) || sorted.length <= LIMIT + 1;
+    const shown = all ? sorted : sorted.filter((ep, i) => i < LIMIT || touched(ep));
+    return [
+      shown.map((ep) => endpointRow(ep, ctx)),
+      sorted.length > shown.length || (state.open.has(key) && sorted.length > LIMIT + 1)
+        ? h("button", { class: "more", onclick: () => toggle(key) }, all ? "Show fewer" : `+ ${sorted.length - shown.length} more`)
+        : null,
+    ];
+  }
+
+  function endpointRow(ep, ctx) {
+    const open = state.open.has(ep.id);
+    const t = state.tab === "change" ? worst(allChangesIn(ep.id, ctx)) : null;
+    return h("section", { class: rowClass(ep.id, ctx, open, "endpoint"), "data-node-id": ep.id,
+      onmouseenter: () => hover(ep.id), onmouseleave: () => hover(null) },
+      h("button", { class: cls("row-head", t && t !== "internal" && `mark-${t}`), "aria-expanded": String(open), onclick: () => toggle(ep.id) },
+        h("span", { class: `verb v-${(ep.method || ep.protocol).toLowerCase()}` }, ep.method || ep.protocol),
+        h("span", { class: "path" }, pathTokens(ep.path)),
+        h("span", { class: cls("aud", `a-${ep.audience}`), title: `${ep.audience} · auth: ${ep.auth}` }, lock()),
+        h("span", { class: "chev", "aria-hidden": "true" }, "›")),
+      changeList(ctx.placed.get(ep.id)),
+      open ? h("div", { class: "row-body" },
+        h("p", { class: "aux" }, h("span", { class: "aux-label" }, "calls "), ep.calls.map((c) => h("button", {
+          class: "op-chip", onclick: (ev) => { ev.stopPropagation(); if (c.ref) reveal(c.ref); },
+          onmouseenter: () => hover(ep.id), onmouseleave: () => hover(null) }, c.label))),
+        h("p", { class: "aux" }, h("span", { class: "aux-label" }, "audience "), ep.audience, " · ", h("span", { class: "aux-label" }, "auth "), ep.auth),
+        noteLine(ep.note), srcLine(ep.sources)) : null);
+  }
+  // Path parameters stand out from the fixed parts.
+  const pathTokens = (p) => p.split(/(\{[^}]+\}|:\w+)/).filter(Boolean).map((x) =>
+    /^(\{|:)/.test(x) ? h("span", { class: "param" }, x) : x.split(/(?<=[/.])/).map((part, i) => [i ? h("wbr", {}) : null, part]));
+
+  // ---- storage ------------------------------------------------------------------
+  const ENGINES = { postgres: "PostgreSQL", mysql: "MySQL", sqlite: "SQLite", dynamodb: "DynamoDB", redis: "Redis", s3: "S3", other: "Store" };
+  const engineBadge = (engine) => h("span", { class: `engine e-${engine}` }, ENGINES[engine] || engine);
+
+  function storeBox(st, ctx) {
+    const open = state.open.has(st.id);
+    const scans = st.tables.reduce((n, tb) => n + tb.scans.length, 0);
+    return h("section", { class: cls("store", open && "open", state.selected === st.id && "selected", (!nodeInPhase(st.id) || filteredOut(st.id, ctx)) && "dim"), "data-node-id": st.id },
+      h("button", { class: "store-head", "aria-expanded": String(open), onclick: () => toggle(st.id) },
+        engineBadge(st.engine), h("span", { class: "store-name" }, st.name),
+        scans ? h("span", { class: "scan-count", title: "Lookups with no index" }, `${scans} scan${scans === 1 ? "" : "s"}`) : null,
+        h("span", { class: "meta" }, `${st.tables.length} table${st.tables.length === 1 ? "" : "s"}`),
+        h("span", { class: "chev", "aria-hidden": "true" }, "›")),
+      changeList(ctx.placed.get(st.id)),
+      open ? [noteLine(st.note), st.tables.map((tb) => tableRow(tb, ctx))] : null);
+  }
+
+  function tableRow(tb, ctx) {
+    const open = state.open.has(tb.id);
+    const meta = tb.relational
+      ? `${tb.columns.length} cols · ${tb.indexes.length} idx`
+      : `${tb.gsis.length} index${tb.gsis.length === 1 ? "" : "es"}`;
+    return h("section", { class: rowClass(tb.id, ctx, open, "table"), "data-node-id": tb.id },
+      h("button", { class: cls("row-head", (() => { const t = state.tab === "change" ? worst(allChangesIn(tb.id, ctx)) : null; return t && t !== "internal" && `mark-${t}`; })()),
+        "aria-expanded": String(open), onclick: () => toggle(tb.id) },
+        tableIcon(), h("span", { class: "row-name mono" }, tb.table),
+        tb.scans.length ? h("span", { class: "scan-count" }, "scan") : null,
+        h("span", { class: "meta" }, meta), h("span", { class: "chev", "aria-hidden": "true" }, "›")),
+      changeList(ctx.placed.get(tb.id)),
+      open ? h("div", { class: "row-body" },
+        h("p", { class: "aux" }, h("span", { class: "aux-label" }, "holds "), chip({ s: tb.entityName, ref: tb.entity }, ctx)),
+        tb.relational ? relationalBody(tb) : keyValueBody(tb),
+        tb.scans.length ? h("div", { class: "scans" }, tb.scans.map((x) => h("div", {}, h("span", { class: "scan-count" }, "scan"), " ", x, h("span", { class: "muted" }, " · no index serves this")))) : null) : null);
+  }
+
+  function relationalBody(tb) {
+    return [
+      h("table", { class: "cols" }, h("tbody", {}, tb.columns.map((c) => h("tr", {},
+        h("td", { class: "mono" }, c.key ? h("span", { class: "pk", title: "primary key" }, "PK") : null, c.name),
+        h("td", { class: "mono ctype" }, c.type),
+        h("td", { class: "muted" }, c.nullable ? "null" : ""))))),
+      tb.keyServes.length ? servesLine("primary key", tb.keyServes) : null,
+      tb.indexes.map((i) => h("div", { class: "index" },
+        h("div", { class: "mono" }, h("span", { class: "idx-kind" }, i.unique ? "unique" : i.using || "index"), ` (${i.on.join(", ")})`, h("span", { class: "muted" }, ` ${i.name}`)),
+        i.serves.length ? servesLine(null, i.serves) : null)),
+    ];
+  }
+
+  function keyValueBody(tb) {
+    const key = (label, pk, sk, serves) => h("div", { class: "index" },
+      h("div", { class: "kv" }, h("span", { class: "idx-kind" }, label),
+        h("span", { class: "mono" }, h("span", { class: "muted" }, "PK "), keyTpl(pk)),
+        sk ? h("span", { class: "mono" }, h("span", { class: "muted" }, "SK "), keyTpl(sk)) : null),
+      serves.length ? servesLine(null, serves) : null);
+    return [
+      key("table", tb.pk, tb.sk, tb.keyServes),
+      tb.gsis.map((g) => key(g.name, g.pk, g.sk, g.serves)),
+      tb.ttl ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "expires by "), tb.ttl) : null,
+    ];
+  }
+  const keyTpl = (t) => t.split(/(\{\w+\})/).filter(Boolean).map((x) => (x.startsWith("{") ? h("span", { class: "param" }, x) : x));
+  const servesLine = (label, xs) => h("div", { class: "serves" }, label ? h("span", { class: "idx-kind" }, label) : null,
+    h("span", { class: "tick", "aria-hidden": "true" }, "✓"), xs.join(" · "));
 
   const fieldsInline = (fs) => fs.map((f, i) => [i ? ", " : "", h("span", { class: "fname" }, f.name), ": ", tokens(f.type)]);
   const tokens = (ts) => ts.map((t) => (t.ref ? chip(t) : h("span", { class: "prim" }, t.s)));
@@ -890,6 +1318,48 @@ open questions:
     s("rect", { x: 1.5, y: 2.5, width: 13, height: 11, rx: 2 }), s("path", { d: "M1.5,6 h13" }));
   const cyl = () => s("svg", { class: "icon", viewBox: "0 0 16 16", width: 14, height: 14, "aria-hidden": "true" },
     s("ellipse", { cx: 8, cy: 4, rx: 6, ry: 2.4 }), s("path", { d: "M2,4 v8 a6,2.4 0 0 0 12,0 v-8" }));
+
+  const tableIcon = () => s("svg", { class: "icon", viewBox: "0 0 16 16", width: 14, height: 14, "aria-hidden": "true" },
+    s("rect", { x: 1.5, y: 2.5, width: 13, height: 11, rx: 1.5 }), s("path", { d: "M1.5,6.5 h13 M1.5,10 h13 M6,6.5 v7" }));
+  const lock = () => s("svg", { class: "icon lock", viewBox: "0 0 16 16", width: 11, height: 11, "aria-hidden": "true" },
+    s("rect", { x: 3, y: 7, width: 10, height: 7, rx: 1.5 }), s("path", { d: "M5.5,7 v-2 a2.5,2.5 0 0 1 5,0 v2" }));
+
+  // ---- domain words -------------------------------------------------------------
+  // Glossary terms are underlined wherever prose mentions them; hovering one
+  // shows what it means here. One floating tip serves the whole page.
+  const termRe = GLOSSARY.length
+    ? new RegExp(`\\b(${GLOSSARY.map((g) => g.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).sort((a, b) => b.length - a.length).join("|")})(s|es)?\\b`, "gi")
+    : null;
+  const termOf = (word) => GLOSSARY.find((g) => g.term.toLowerCase() === word.toLowerCase());
+  function terms(text) {
+    if (!termRe || !text) return text;
+    const out = [];
+    let last = 0;
+    for (const m of text.matchAll(termRe)) {
+      const g = termOf(m[1]);
+      if (!g) continue;
+      out.push(text.slice(last, m.index), h("span", { class: "term", tabindex: "0", "data-tip": g.meaning, "data-term": g.term }, m[0]));
+      last = m.index + m[0].length;
+    }
+    out.push(text.slice(last));
+    return out;
+  }
+  function tipFor(el) {
+    const tip = document.getElementById("tip");
+    if (!tip) return;
+    if (!el) { tip.hidden = true; return; }
+    tip.replaceChildren(h("b", {}, el.getAttribute("data-term")), " ", el.getAttribute("data-tip"));
+    tip.hidden = false;
+    const r = el.getBoundingClientRect();
+    const w = Math.min(300, window.innerWidth - 24);
+    tip.style.width = `${w}px`;
+    tip.style.left = `${Math.max(12, Math.min(window.innerWidth - w - 12, r.left))}px`;
+    const below = r.bottom + 8 + tip.offsetHeight < window.innerHeight;
+    tip.style.top = `${below ? r.bottom + 6 : r.top - tip.offsetHeight - 6}px`;
+  }
+  document.addEventListener("mouseover", (ev) => { const t = ev.target.closest?.(".term"); tipFor(t || null); });
+  document.addEventListener("focusin", (ev) => { if (ev.target.classList?.contains("term")) tipFor(ev.target); });
+  document.addEventListener("focusout", () => tipFor(null));
 
   // ---- wires --------------------------------------------------------------------
   function drawWires() {
@@ -909,7 +1379,9 @@ open questions:
       s("marker", { id: "ah", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
         s("path", { d: "M0,0 L10,5 L0,10 z", class: "ah" })),
       s("marker", { id: "ah-hot", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
-        s("path", { d: "M0,0 L10,5 L0,10 z", class: "ah hot" }))));
+        s("path", { d: "M0,0 L10,5 L0,10 z", class: "ah hot" })),
+      s("marker", { id: "ah-route", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
+        s("path", { d: "M0,0 L10,5 L0,10 z", class: "ah route" }))));
     // The element for a node, or for its nearest ancestor that is on screen
     // (a contract inside a closed sub-module is drawn at the sub-module).
     const find = (id) => {
@@ -954,10 +1426,20 @@ open questions:
 
     for (const e of tree().edges) {
       const call = e.kind === "call";
+      // Endpoint -> operation links are many; they appear only for the
+      // endpoint or operation being looked at.
+      if (e.kind === "route") {
+        const live = [sel, state.hover].some((x) => x && (under(e.from, x) || under(e.to, x) || x === e.from));
+        if (!live) continue;
+        const from = layer.querySelector(`[data-node-id="${CSS.escape(e.from)}"]`), to = find(e.to);
+        if (!from || !to || from.closest(".card") === to.closest(".card")) continue;
+        svg.append(s("path", { d: link(from, to), class: "wire route hot", "marker-end": "url(#ah-route)" }));
+        continue;
+      }
       const from = find(e.from), to = find(e.to);
       // A module and what sits inside it are already related by nesting.
       if (!from || !to || from === to || from.contains(to) || to.contains(from)) continue;
-      const hot = sel && (under(sel, e.from) || under(sel, e.to));
+      const hot = sel && (under(e.from, sel) || under(e.to, sel) || under(sel, e.to));
       const fresh = state.tab === "change" && !before.has(`${e.kind} ${e.from} ${e.to}`);
       svg.append(s("path", {
         d: link(from, to, call ? 0 : 10),
@@ -994,49 +1476,163 @@ open questions:
   }
 
   // ---- below the canvas: context ---------------------------------------------------
+  // Open questions come first and start open: they are what the reader owes.
   function context() {
     const parts = [];
-    const section = (key, title, count, ...body) => h("details", {
-      class: "ctx", open: state.ctxOpen.has(key),
+    const section = (key, title, count, extra, ...body) => h("details", {
+      class: cls("ctx", extra), open: state.ctxOpen.has(key), id: `ctx-${key}`,
       ontoggle: (ev) => { ev.target.open ? state.ctxOpen.add(key) : state.ctxOpen.delete(key); },
     }, h("summary", {}, h("h2", {}, title, h("span", { class: "count" }, String(count)))), body);
+    const nodeLink = (id) => h("button", { class: "node-link", onclick: () => reveal(id) }, pretty(id));
+    if (doc.questions.length) {
+      parts.push(section("questions", "Needs your call", doc.questions.length, "asks", h("ol", { class: "qs" }, doc.questions.map((q) => h("li", {},
+        h("div", { class: "q" }, terms(q.text)),
+        q.options ? h("div", { class: "options" }, q.options.map((o) => h("span", { class: "option" }, o))) : null,
+        q.node ? nodeLink(q.node) : null)))));
+    }
     if (view.changes.length && doc.slices.length) {
       const ids = allIds(view.proposed);
       const taken = new Set();
       const phaseCards = h("div", { class: "phases" }, doc.slices.map((sl, i) => {
         const cs = view.changes.filter((c) => !taken.has(c) && changeInPhase(c, sl.nodes));
         cs.forEach((c) => taken.add(c));
-        const counts = TAGS.map((t) => [t, cs.filter((c) => c.tag === t).length]).filter(([, n]) => n);
         return h("div", { class: cls("phase", state.phase === i && "active") },
-          h("h3", {}, h("span", { class: "muted" }, `Phase ${i + 1} `), sl.name),
-          h("p", {}, sl.goal),
-          sl.notes ? h("p", { class: "muted" }, sl.notes) : null,
-          h("p", { class: "counts" }, counts.map(([t, n]) => h("span", { class: `tag ${t}` }, `${n} ${t}`))),
+          h("h3", {}, h("span", { class: "step" }, String(i + 1)), sl.name, tally(cs)),
+          h("p", {}, terms(sl.goal)),
+          sl.notes ? h("p", { class: "muted" }, terms(sl.notes)) : null,
           h("button", { class: "linklike", onclick: () => showPhase(i) }, state.phase === i ? "Showing on the map" : "Show on the map"));
       }));
       const rest = view.changes.filter((c) => !taken.has(c) && c.tag !== "internal");
-      parts.push(section("phases", "Phases", doc.slices.length, phaseCards,
+      parts.push(section("phases", "Phases", doc.slices.length, null, phaseCards,
         rest.length ? h("p", { class: "muted" }, `${rest.length} change(s) not in a phase yet: `,
           rest.map((c, i) => [i ? ", " : "", h("button", { class: "linklike", onclick: () => reveal(placeOf(c, ids)) }, c.what)])) : null));
     }
-    if (doc.questions.length) {
-      parts.push(section("questions", "Open questions", doc.questions.length, h("ol", { class: "qs" }, doc.questions.map((q) => h("li", {},
-        q.text, q.node ? [" ", h("button", { class: "linklike", onclick: () => reveal(q.node) }, pretty(q.node))] : null,
-        q.options ? h("div", { class: "muted" }, q.options.join(" · ")) : null)))));
-    }
     if (doc.decisions.length) {
-      parts.push(section("decisions", "Decisions", doc.decisions.length, h("ul", { class: "ds" }, doc.decisions.map((d) => h("li", {},
-        h("strong", {}, d.text), d.node ? [" ", h("button", { class: "linklike", onclick: () => reveal(d.node) }, pretty(d.node))] : null,
-        h("div", { class: "muted" }, d.why))))));
+      parts.push(section("decisions", "Decisions", doc.decisions.length, null, h("ul", { class: "ds" }, doc.decisions.map((d) => h("li", {},
+        h("div", { class: "d" }, terms(d.text)), h("div", { class: "why" }, h("span", { class: "why-label" }, "why "), terms(d.why)),
+        d.node ? nodeLink(d.node) : null)))));
     }
     const diags = tree().diagnostics;
     if (diags.length) {
-      state.ctxOpen.add("checks");
-      parts.push(section("checks", "Check results", diags.length, diags.map((d) =>
-        h("div", { class: `diag ${d.level}` }, h("strong", {}, d.level), " ", h("code", {}, d.at), " ", d.message))));
+      parts.push(section("checks", "Check results", diags.length, null, diags.map((d) =>
+        h("div", { class: `diag ${d.level}` }, h("strong", {}, d.level), " ", h("code", {}, d.at), h("div", {}, d.message)))));
+    }
+    if (GLOSSARY.length) {
+      parts.push(section("glossary", "Domain words", GLOSSARY.length, null, h("dl", { class: "glossary" }, GLOSSARY.map((g) => [
+        h("dt", {}, g.node ? h("button", { class: "linklike", onclick: () => reveal(g.node) }, g.term) : g.term),
+        h("dd", {}, g.meaning)]))));
     }
     return parts.length ? h("section", { class: "context" }, parts) : null;
   }
+
+  function openSection(key) {
+    state.ctxOpen.add(key);
+    render();
+    document.getElementById(`ctx-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // ---- briefing: the page in ten seconds ----------------------------------------------
+  // What was asked, what it costs, what needs an answer, and the order to
+  // read it in. Each tile is also a filter or a shortcut.
+  function briefing() {
+    const t = tree();
+    const tile = (cls_, n, label, onclick, active, title) => h("button", {
+      class: cls("tile", cls_, active && "active", !n && "zero"), onclick, title, "aria-pressed": active ? "true" : "false", disabled: !n,
+    }, h("span", { class: "n" }, String(n)), h("span", { class: "l" }, label));
+    const count = (tag) => view.changes.filter((c) => c.tag === tag && (state.phase == null || changeInPhase(c, doc.slices[state.phase].nodes))).length;
+    const only = (tag) => () => { state.tab = "change"; state.only = state.only === tag ? null : tag; render(); };
+    const ms = everyModule(t.modules);
+    const warnings = t.diagnostics.length;
+    const tiles = view.proposed
+      ? [
+        tile("breaking", count("breaking"), "breaking", only("breaking"), state.only === "breaking", "Consumers must change. Click to show only these."),
+        tile("migration", count("migration"), "migrations", only("migration"), state.only === "migration", "Stored data must change. Click to show only these."),
+        tile("additive", count("additive"), "additive", only("additive"), state.only === "additive", "Nothing existing changes. Click to show only these."),
+      ]
+      : [
+        tile("plain", ms.filter((m) => m.depth === "mapped").length, "modules mapped"),
+        tile("plain", ms.reduce((n, m) => n + m.contracts.length, 0), "contracts"),
+        tile("plain", ms.reduce((n, m) => n + m.entities.length, 0), "tables"),
+        tile("plain", ms.reduce((n, m) => n + m.endpoints.length, 0), "endpoints"),
+      ];
+    tiles.push(tile("asks", doc.questions.length, doc.questions.length === 1 ? "question for you" : "questions for you", () => openSection("questions")));
+    if (warnings) tiles.push(tile("checks", warnings, warnings === 1 ? "check finding" : "check findings", () => openSection("checks")));
+    const steps = doc.slices.length && view.proposed
+      ? h("ol", { class: "stepper", "aria-label": "Phases" },
+        h("li", {}, h("button", { "aria-pressed": String(state.phase == null), onclick: () => { state.phase = null; render(); } }, "All")),
+        doc.slices.map((sl, i) => h("li", {}, h("button", {
+          "aria-pressed": String(state.phase === i), title: sl.goal,
+          onclick: () => { state.tab = "change"; state.phase = state.phase === i ? null : i; render(); },
+        }, h("span", { class: "step" }, String(i + 1)), sl.name))))
+      : null;
+    return h("section", { class: "briefing" },
+      h("div", { class: "ask" }, h("div", { class: "eyebrow" }, doc.mode === "learn" ? "What we're learning" : "The change"), h("p", {}, terms(doc.intent))),
+      h("div", { class: "tiles" }, tiles),
+      steps,
+      GLOSSARY.length ? h("div", { class: "words" }, h("span", { class: "eyebrow" }, "Domain words"),
+        GLOSSARY.map((g) => h("button", { class: "term word", "data-tip": g.meaning, "data-term": g.term, onclick: () => g.node && reveal(g.node) }, g.term))) : null);
+  }
+
+  // ---- search: jump to anything ------------------------------------------------------
+  function searchIndex() {
+    const out = [];
+    for (const m of everyModule(tree().modules)) {
+      out.push({ id: m.id, label: m.name, kind: "module", hint: m.purpose });
+      for (const ep of m.endpoints) out.push({ id: ep.id, label: `${ep.method || ep.protocol} ${ep.path}`, kind: "endpoint", hint: ep.calls.map((c) => c.label).join(", ") });
+      for (const c of m.contracts) {
+        out.push({ id: c.id, label: c.name, kind: "contract", hint: m.name });
+        for (const o of c.operations) out.push({ id: o.id, label: `${c.name}.${o.name}`, kind: "operation", hint: o.mode });
+        for (const e of c.events) out.push({ id: e.id, label: `${c.name}.${e.name}`, kind: "event", hint: "event" });
+        for (const ty of c.types) out.push({ id: ty.id, label: ty.name, kind: "type", hint: c.name });
+      }
+      for (const e of m.entities) out.push({ id: e.id, label: e.name, kind: "data", hint: m.name });
+      for (const st of m.stores) for (const tb of st.tables) out.push({ id: tb.id, label: tb.table, kind: "storage", hint: `${ENGINES[st.engine] || st.engine} · ${st.name}` });
+    }
+    for (const g of GLOSSARY) out.push({ id: g.node, label: g.term, kind: "word", hint: g.meaning });
+    return out;
+  }
+  function search() {
+    let hits = [], at = 0;
+    const list = h("ul", { class: "hits", role: "listbox", hidden: true });
+    const go = (hit) => { input.value = ""; list.hidden = true; input.blur(); if (hit?.id) reveal(hit.id); };
+    const draw = () => {
+      list.replaceChildren(...hits.map((x, i) => h("li", { role: "option", class: cls(i === at && "on"), "aria-selected": String(i === at),
+        onmousedown: (ev) => { ev.preventDefault(); go(x); } },
+      h("span", { class: `kind k-${x.kind}` }, x.kind), h("span", { class: "hit-label" }, x.label), h("span", { class: "hit-hint" }, x.hint))));
+      list.hidden = !hits.length;
+    };
+    const input = h("input", {
+      type: "search", id: "search", placeholder: "Jump to…  /", "aria-label": "Jump to a module, endpoint, table or word", autocomplete: "off",
+      oninput: () => {
+        const q = input.value.trim().toLowerCase();
+        const idx = searchIndex();
+        hits = q ? idx.filter((x) => x.label.toLowerCase().includes(q) || (x.kind === "word" && x.hint.toLowerCase().includes(q)))
+          .sort((a, b) => Number(!a.label.toLowerCase().startsWith(q)) - Number(!b.label.toLowerCase().startsWith(q))).slice(0, 8) : [];
+        at = 0; draw();
+      },
+      onkeydown: (ev) => {
+        if (ev.key === "ArrowDown") { at = Math.min(hits.length - 1, at + 1); draw(); ev.preventDefault(); }
+        else if (ev.key === "ArrowUp") { at = Math.max(0, at - 1); draw(); ev.preventDefault(); }
+        else if (ev.key === "Enter") go(hits[at]);
+        else if (ev.key === "Escape") { input.value = ""; hits = []; draw(); input.blur(); }
+      },
+      onblur: () => setTimeout(() => { list.hidden = true; }, 100),
+    });
+    return h("div", { class: "search" }, input, list);
+  }
+
+  // Keys for working quickly: / search, esc clear, f fit, 0-9 phases.
+  document.addEventListener("keydown", (ev) => {
+    if (ev.target.closest?.("input, textarea") || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (ev.key === "/") { ev.preventDefault(); document.getElementById("search")?.focus(); }
+    else if (ev.key === "Escape") {
+      if (state.selected || state.only || state.phase != null) { state.selected = null; state.only = null; state.phase = null; render(); }
+    } else if (ev.key === "f") fit();
+    else if (/^[0-9]$/.test(ev.key) && view.proposed) {
+      const i = Number(ev.key) - 1;
+      if (i < doc.slices.length) { state.tab = "change"; state.phase = i < 0 ? null : i; render(); }
+    }
+  });
 
   function showPhase(i) {
     state.tab = "change";
@@ -1063,7 +1659,7 @@ open questions:
     return h("aside", { class: "chat", "aria-label": "Conversation" },
       h("div", { class: "chat-head" }, "Conversation"),
       h("div", { class: "msgs" },
-        h("div", { class: "msg you" }, h("div", { class: "who" }, "Intent"), doc.intent),
+        state.notes.length ? null : h("p", { class: "empty" }, "Notes you add land here. Click anything on the map first to pin a note to it, then copy them all as one prompt for the agent."),
         state.notes.map((n, i) => h("div", { class: "msg you queued" },
           h("div", { class: "who" }, n.anchor ? h("button", { class: "linklike", onclick: () => reveal(n.anchor) }, pretty(n.anchor)) : "General",
             h("button", { class: "x", "aria-label": "Remove note", onclick: () => { state.notes.splice(i, 1); saveNotes(); render(); } }, "×")),
@@ -1100,23 +1696,25 @@ open questions:
   function render() {
     const tabs = view.proposed
       ? h("div", { class: "tabs", role: "group", "aria-label": "Which tree" },
-        [["current", "Current"], ["proposed", "Proposed"], ["change", "Change"]].map(([k, label]) =>
-          h("button", { "aria-pressed": String(state.tab === k), onclick: () => { state.tab = k; render(); } }, label)))
+        [["current", "Before"], ["proposed", "After"], ["change", "Change"]].map(([k, label]) =>
+          h("button", { "aria-pressed": String(state.tab === k), onclick: () => { state.tab = k; if (k !== "change") state.only = null; render(); } }, label)))
       : null;
-    const phases = state.tab === "change" && doc.slices.length
-      ? h("div", { class: "phase-strip", role: "group", "aria-label": "Phase" },
-        h("button", { "aria-pressed": String(state.phase == null), onclick: () => { state.phase = null; render(); } }, "All changes"),
-        doc.slices.map((sl, i) => h("button", { "aria-pressed": String(state.phase === i), onclick: () => { state.phase = i; render(); } }, `${i + 1} · ${sl.name}`)))
-      : null;
+    const filters = [
+      state.only ? h("button", { class: `filter-chip ${state.only}`, onclick: () => { state.only = null; render(); } }, `only ${state.only}`, h("span", { "aria-hidden": "true" }, " ×")) : null,
+      state.selected ? h("button", { class: "filter-chip", onclick: () => { state.selected = null; render(); } }, `focus: ${pretty(state.selected)}`, h("span", { "aria-hidden": "true" }, " ×")) : null,
+    ];
     const textarea = document.activeElement?.tagName === "TEXTAREA";
     document.getElementById("app").replaceChildren(h("div", { class: "shell" },
       h("main", { class: "main" },
         h("header", { class: "top" },
           h("div", { class: "heading" }, h("h1", {}, doc.title), h("span", { class: "badge" }, doc.mode === "learn" ? "learning" : "plan")),
-          h("div", { class: "controls" }, tabs, phases)),
+          h("div", { class: "controls" }, search(), tabs)),
+        briefing(),
+        filters.some(Boolean) ? h("div", { class: "filters" }, filters) : null,
         canvas(),
         context()),
-      sidebar()));
+      sidebar()),
+    h("div", { id: "tip", class: "tip", role: "tooltip", hidden: true }));
     if (textarea) document.querySelector(".composer textarea")?.focus();
     layoutGraph();
     if (!state.fitted) { fit(); state.fitted = true; }

@@ -15,7 +15,12 @@ export type PlanDocument = {
   questions: Question[];             // open, for the human to answer
   decisions: Decision[];             // settled, with the reason
   facts: Record<string, Fact[]>;     // node id -> deterministic evidence from the code
+  glossary?: Term[];                 // the domain's own words, for a reader new to it
 };
+
+// A word the domain uses in its own sense ("envelope", "sealing"), with what
+// it means here and the node that embodies it.
+export type Term = { term: string; meaning: string; node?: string };
 
 // A slice is a set of nodes in the proposed tree that change together and can
 // ship on their own. Changes from the diff are assigned by node id.

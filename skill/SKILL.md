@@ -31,6 +31,12 @@ The plan is a conceptual model, not a transcript of the code. Get these right an
    saved through its root.
 3. **Contracts.** What a module promises others: commands, queries with their errors, events, and
    the DTO types they use. Never expose a table type in a contract.
+4. **Storage.** For each mapped module that owns data, the store that holds it: engine, table
+   names, the indexes or key templates the access patterns rely on, and column types only where
+   they differ from the default. Read these from the schema or migrations; do not invent indexes.
+5. **Endpoints.** The routes and procedures near the change, with protocol, method, path, auth and
+   the operations they call. An API layer that only routes is its own module that owns endpoints
+   and no data.
 
 Leave out function bodies, frameworks, infrastructure, UI, and any field or operation the intent
 does not touch. Three to six fields per table is usually right; keep the ones the change reads,
@@ -69,8 +75,8 @@ export is a `PlanDocument`:
 
 ```ts
 import type { PlanDocument } from "PLAN_AST/src/doc.ts";
-import { aggregate, command, contract, entity, enumOf, event, findBy, get, module, plan, query,
-  record, repo, save, src, stub, subscribe, t } from "PLAN_AST/src/dsl.ts";
+import { aggregate, command, contract, entity, enumOf, event, findBy, get, http, idx, module, plan,
+  query, record, repo, rpc, save, src, store, stub, subscribe, t, table, uniqueIdx } from "PLAN_AST/src/dsl.ts";
 ```
 
 Use absolute paths for those imports. Build the current modules once, then build the proposed
@@ -88,6 +94,14 @@ unchanged modules are written once.
 - `decisions`: the forks you settled while mapping, each with its reason.
 - `questions`: the forks only the user can settle, each with two or three options and the node
   it is about. Ask about behaviour and boundaries, not naming.
+- Stores: `store("main database", "postgres", [table("Recipient", "Recipient", { indexes: [idx("token")] })])`
+  or, for DynamoDB, `table("Payment", "payments", { pk: "PAY#{id}", gsis: [{ name: "byOrder", pk: "ORDER#{orderId}" }] })`.
+  When an entity is bound, put its indexes on the binding only, not on the entity.
+- Endpoints: `http("POST", "/api/v2/envelope/distribute", "Envelopes.Send", { auth: "api token" })` or
+  `rpc("trpc", "recipient.rejectDocumentWithToken", "Signing.Reject", { auth: "recipient token" })`.
+  List the ones near the change, not every route.
+- `glossary`: the domain's own words a newcomer would trip on (eight to twelve), each with a
+  one-sentence meaning and the node that embodies it. The page underlines them everywhere.
 - `facts`: deterministic evidence keyed by node id (counts, complexity, call sites). Say how each
   was measured in `detail`. Never make one up.
 
