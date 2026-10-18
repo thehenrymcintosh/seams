@@ -32,6 +32,8 @@ right view can be picked per context.
 | `src/render/` | Renders a plan document to one standalone HTML file (`render.ts`, `viewmodel.ts`, inline `client.js` and `client.css`). |
 | `src/cli.ts` | `render`, `read` and `check` for plan documents. |
 | `examples/shop.doc.ts` | The worked example as a plan document, with two stub modules. |
+| `skill/SKILL.md` | The plan-doc skill: how an agent maps a repo from an intent into a plan document. |
+| `plans/documenso-delegation.plan.ts` | The skill's first real run: signer delegation in [Documenso](https://github.com/documenso/documenso). Rendered next to it as `.plan.html`. |
 | `docs/app-pitch.md` | Where this is heading: a skill that writes plan documents, with its own review loop. |
 | `out/` | Everything `run.ts` renders, including `shop-payments.plan.html`. |
 
@@ -59,6 +61,7 @@ It carries the plan three ways:
 - **As the source:** `#plan-doc`, the document as JSON, which is what gets edited and re-rendered.
 
 ```sh
+node src/cli.ts render plan.ts                   # .ts (default export), .json or .html; writes plan.plan.html
 node src/cli.ts render plan.json -o plan.html   # refuses if the plan breaks a rule (--force to show it anyway)
 node src/cli.ts read plan.html                   # the embedded document back out, as JSON
 node src/cli.ts read plan.html --outline         # the agent outline
@@ -84,7 +87,8 @@ rather than queries, so the plan knows every way a module touches its data.
 - **Aggregates** group tables that change together (`aggregate("Order", ["OrderLine"], invariants)`).
   Only the root has a repository, and it loads and saves the whole aggregate
   (`OrderRepository.get(): OrderAggregate`). Invariants are written down on the aggregate and
-  carried into the generated types as comments.
+  carried into the generated types as comments. A root can be found through a member's indexed
+  field: `findBy("Recipient.token")` loads the envelope a signing token belongs to.
 
 ## What the checker enforces
 
@@ -105,7 +109,10 @@ The full list: references resolve; one owner per entity; repositories only
 touch their own module's entities; every `findBy` is backed by the key or an
 index; contracts never expose storage entities; cross-module types need a
 declared dependency; subscribed events exist; no dependency cycles; a module
-that owns data provides some contract.
+that owns data provides some contract; a contract appears once in `uses`.
+
+The change view also tags a value added to an enum that a table stores as a
+`migration`, since a database enum has to be altered first.
 
 ## Views
 
@@ -118,6 +125,5 @@ that owns data provides some contract.
 
 - **Plan and code drift.** Today the skeleton is generated one way. The obvious next step is the reverse: extract a plan from existing TypeScript (contract files and the import graph) and diff it against the intended plan, so the plan stays true after code is written.
 - **Authoring format.** Plans are written as TypeScript with a small DSL, which gives type safety and autocomplete for free. A visual editor or a YAML form could sit on the same AST later.
-- **Nesting.** Modules are flat. Sub-modules (a module that is itself a small plan) are the natural extension once a system gets bigger.
 - **Not modelled yet:** transactions and consistency boundaries, sync vs. async calls, versioning of contracts, non-functional notes (latency, volume) on access patterns.
 - **AI use.** The checker's rules are exactly the assumptions an agent could rely on: a change scoped to one module only touches its folder, and a change to a `*.contract.ts` file is the only kind that needs cross-module review.

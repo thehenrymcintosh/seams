@@ -165,7 +165,12 @@ function repositoriesFile(m: Module): string {
 function repoSig(e: string, meth: RepoMethod, whole: string): string {
   switch (meth.kind) {
     case "get": return `get(key: ${e}Key): Promise<${whole} | null>`;
-    case "find": return `findBy${meth.by.map(upperFirst).join("And")}(by: Pick<${e}, ${meth.by.map((f) => JSON.stringify(f)).join(" | ")}>): Promise<${whole}[]>`;
+    case "find": {
+      const member = meth.by[0].includes(".") ? meth.by[0].split(".")[0] : e;
+      const cols = meth.by.map((f) => f.split(".").pop()!);
+      const name = meth.by.map((f) => f.split(".").map(upperFirst).join("")).join("And");
+      return `findBy${name}(by: Pick<${member}, ${cols.map((f) => JSON.stringify(f)).join(" | ")}>): Promise<${whole}[]>`;
+    }
     case "save": return `save(${whole === e ? "entity" : "aggregate"}: ${whole}): Promise<void>`;
     case "delete": return `delete(key: ${e}Key): Promise<void>`;
   }

@@ -1,0 +1,1202 @@
+<!doctype html>
+<html lang="en" data-lavish-annotate="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="plan-ast">
+<title>Signer delegation</title>
+<style>
+:root {
+  --bg: #f6f6f3;
+  --surface: #ffffff;
+  --surface-2: #f0efeb;
+  --text: #1d1d1b;
+  --muted: #6b6a66;
+  --border: #dcdad4;
+  --accent: #2f5bd3;
+  --accent-soft: rgba(47, 91, 211, 0.12);
+  --type: #7a4fd0;
+  --type-soft: rgba(122, 79, 208, 0.12);
+  --breaking: #c4352b;
+  --migration: #b26b00;
+  --additive: #23843f;
+  --breaking-bg: #fbe9e7;
+  --migration-bg: #fdf1dc;
+  --additive-bg: #e5f4e8;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151514;
+    --surface: #1e1e1c;
+    --surface-2: #292926;
+    --text: #ecebe7;
+    --muted: #a3a29c;
+    --border: #3a3a36;
+    --accent: #7c9cff;
+    --accent-soft: rgba(124, 156, 255, 0.16);
+    --type: #b69cff;
+    --type-soft: rgba(182, 156, 255, 0.16);
+    --breaking: #ff7b6e;
+    --migration: #f0b44c;
+    --additive: #5fcf7e;
+    --breaking-bg: #3b1f1c;
+    --migration-bg: #3a2c12;
+    --additive-bg: #1a3322;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
+button { font: inherit; color: inherit; }
+code { font-family: var(--mono); font-size: 12px; }
+h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 15px; margin: 28px 0 10px; }
+h3 { font-size: 14px; margin: 0 0 4px; }
+p { margin: 4px 0; }
+.muted { color: var(--muted); }
+.noscript { padding: 16px; }
+.badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+.linklike { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; text-align: left; }
+.x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; }
+
+/* shell: main column + thin conversation sidebar */
+.shell { display: grid; grid-template-columns: minmax(0, 1fr) 300px; min-height: 100vh; }
+.main { min-width: 0; padding: 20px 20px 48px; }
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .main { padding: 16px 16px 32px; }
+}
+
+header.top { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.heading { display: flex; gap: 10px; align-items: center; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tabs, .phase-strip { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.tabs button, .phase-strip button { border: 0; background: transparent; padding: 5px 12px; cursor: pointer; }
+.tabs button + button, .phase-strip button + button { border-left: 1px solid var(--border); }
+.tabs button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.phase-strip button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+
+/* canvas: a pannable, zoomable graph */
+.canvas-wrap { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.viewport { position: relative; height: 72vh; min-height: 460px; overflow: hidden; cursor: grab; touch-action: none;
+  background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 22px 22px; }
+.viewport.dragging { cursor: grabbing; }
+.viewport.dragging * { user-select: none; }
+.layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.layer > .card { position: absolute; width: 300px; visibility: hidden; z-index: 1; cursor: default; }
+.layer > .card.stub { width: 240px; }
+.card-head { cursor: grab; }
+.wires { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.wires.under { z-index: 0; }
+.wires.over { z-index: 2; }
+.tools { position: absolute; top: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 4px; z-index: 3; }
+.tool { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 2px 9px; cursor: pointer; font-size: 12.5px; min-width: 28px; }
+.tool:hover { border-color: var(--accent); color: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 8px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.legend .hint { margin-left: auto; }
+.legend .hint::before { display: none; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 0; margin-right: 6px; vertical-align: 3px; border-top: 1.5px solid var(--muted); }
+.legend .lg-event::before { border-top-style: dashed; }
+.legend .lg-new::before { border-top-color: var(--additive); }
+.legend .lg-type::before { border-top-color: var(--type); border-top-style: dotted; border-top-width: 2px; }
+.legend .lg-tag::before { width: 10px; height: 10px; border: 0; border-radius: 2px; vertical-align: -1px; }
+.legend .lg-tag.breaking::before { background: var(--breaking); }
+.legend .lg-tag.migration::before { background: var(--migration); }
+.legend .lg-tag.additive::before { background: var(--additive); }
+
+/* cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: opacity 0.15s; }
+.card.stub { border-style: dashed; background: transparent; }
+.card.selected, .card .selected { box-shadow: inset 0 0 0 2px var(--accent); }
+.card.tag-breaking { border-color: var(--breaking); box-shadow: 0 0 0 1px var(--breaking); }
+.card.tag-migration { border-color: var(--migration); box-shadow: 0 0 0 1px var(--migration); }
+.card.tag-additive { border-color: var(--additive); box-shadow: 0 0 0 1px var(--additive); }
+.dim { opacity: 0.35; }
+.card-head { padding: 10px 12px; cursor: pointer; }
+.title { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.name { font-weight: 600; font-size: 15px; }
+.purpose { color: var(--muted); font-size: 12.5px; }
+.listens { font-size: 12px; color: var(--muted); }
+.linklike.quiet { color: var(--text); text-decoration-color: var(--border); }
+.src { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.note { font-size: 12.5px; border-left: 2px solid var(--border); padding-left: 8px; color: var(--muted); }
+.note.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+details.src summary { cursor: pointer; list-style: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+details.src summary::-webkit-details-marker { display: none; }
+.fact { font-size: 11px; color: var(--muted); background: var(--surface-2); border-radius: 4px; padding: 0 5px; }
+
+.row { border-top: 1px solid var(--border); }
+
+/* aggregates: a consistency boundary around the tables it holds */
+.aggregate { margin: 8px 10px; border: 1.5px dashed color-mix(in srgb, var(--muted) 60%, transparent); border-radius: 8px; overflow: hidden; }
+.aggregate .row:first-of-type { border-top-color: transparent; }
+.agg-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 10px; background: none; border: 0; cursor: pointer; text-align: left; font-size: 11.5px; color: var(--muted); }
+.agg-head:hover { background: var(--surface-2); }
+.agg-label { flex: 1; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+.agg-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.invariants { margin: 0 10px 6px; padding-left: 16px; font-size: 12px; }
+.invariants li { margin: 2px 0; }
+.aggregate > .changes { padding: 0 10px; }
+
+/* sub-modules: rows that open into a card nested inside the parent */
+.nested { padding: 8px 10px 10px; border-top: 1px solid var(--border); background: var(--surface-2); }
+.nested > .card { box-shadow: none; }
+.title .x { margin-left: auto; }
+.row-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 12px; background: none; border: 0; cursor: pointer; text-align: left; position: relative; }
+.row-head:hover { background: var(--surface-2); }
+.row-head[class*="mark-"]::before { content: ""; position: absolute; left: 0; top: 5px; bottom: 5px; width: 3px; border-radius: 0 2px 2px 0; }
+.row-head.mark-breaking::before { background: var(--breaking); }
+.row-head.mark-migration::before { background: var(--migration); }
+.row-head.mark-additive::before { background: var(--additive); }
+.row-name { flex: 1; }
+.meta { font-size: 11.5px; color: var(--muted); }
+.chev { color: var(--muted); transition: transform 0.15s; }
+.row-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.icon { fill: none; stroke: var(--muted); stroke-width: 1.4; flex: none; }
+.row-body { padding: 2px 12px 10px; }
+
+.member { padding: 6px 8px; margin: 0 -8px; border-radius: 6px; cursor: pointer; }
+.member:hover { background: var(--surface-2); }
+.sig { font-family: var(--mono); font-size: 12px; line-height: 1.7; word-break: break-word; }
+.mname { font-weight: 600; }
+.fname { color: var(--muted); }
+.prim { color: var(--text); }
+.mode { font-family: var(--sans); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.mode.event { border-style: dashed; }
+.errs { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+
+.chip { font-family: var(--mono); font-size: 12px; color: var(--type); background: var(--type-soft); border: 1px solid transparent; border-radius: 4px; padding: 0 4px; cursor: pointer; }
+.chip:hover, .chip.hot-type { border-color: var(--type); }
+.chip.linked { border-color: color-mix(in srgb, var(--type) 45%, transparent); }
+
+.types { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.type-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 12px; }
+.typecard { border: 1px solid color-mix(in srgb, var(--type) 40%, var(--border)); border-left: 3px solid var(--type); border-radius: 6px; padding: 6px 8px; background: var(--surface); }
+.typecard.hot-type, .row.hot-type { box-shadow: 0 0 0 2px var(--type-soft); }
+.type-head { display: flex; justify-content: space-between; align-items: center; }
+.type-name { background: none; border: 0; padding: 0; font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--type); cursor: pointer; }
+.fields { font-family: var(--mono); font-size: 12px; line-height: 1.75; }
+.key { font-family: var(--sans); font-size: 10.5px; color: var(--muted); margin-left: 6px; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.values { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.value { font-family: var(--mono); font-size: 11.5px; border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; }
+.aux { font-size: 12px; color: var(--muted); }
+
+.flash { animation: flash 0.9s ease-out; }
+@keyframes flash { from { box-shadow: 0 0 0 4px var(--type-soft), 0 0 0 2px var(--type); } }
+
+/* changes, shown on the node they affect */
+.changes { list-style: none; padding: 0; margin: 6px 0 2px; font-size: 12px; }
+.changes li { padding: 2px 0; display: flex; gap: 6px; align-items: baseline; }
+.changes li.internal { color: var(--muted); }
+.row > .changes { padding: 0 12px 6px; margin-top: 0; }
+.tag { flex: none; font-size: 10.5px; font-weight: 600; padding: 0 5px; border-radius: 4px; }
+.tag.breaking { color: var(--breaking); background: var(--breaking-bg); }
+.tag.migration { color: var(--migration); background: var(--migration-bg); }
+.tag.additive { color: var(--additive); background: var(--additive-bg); }
+.tag.internal { color: var(--muted); background: var(--surface-2); }
+
+/* wires */
+.wire { fill: none; stroke: var(--muted); stroke-width: 1.3; opacity: 0.8; }
+.wire.event { stroke-dasharray: 5 4; }
+.wire.type { stroke: var(--type); stroke-dasharray: 2 3; stroke-width: 1.4; opacity: 0.55; }
+.wire.new { stroke: var(--additive); opacity: 1; stroke-width: 1.6; }
+.wire.hot { stroke: var(--accent); stroke-width: 2; opacity: 1; }
+.wire.type.hot { stroke: var(--type); stroke-dasharray: none; }
+.wire.faded, .wire-label.faded { opacity: 0.15; }
+.wire-label { font: 11px var(--sans); fill: var(--muted); }
+.wire-label.hot { fill: var(--accent); }
+.ah { fill: var(--muted); }
+.ah.hot { fill: var(--accent); }
+
+/* context below the canvas */
+.context { max-width: 980px; }
+.phases { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.phase { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.phase.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.counts { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.qs li, .ds li { margin: 6px 0; }
+.diag { padding: 8px 12px; border-left: 3px solid var(--breaking); background: var(--surface); margin: 6px 0; font-size: 13px; }
+.diag.warning { border-color: var(--migration); }
+
+/* conversation sidebar */
+.chat { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+@media (max-width: 900px) { .chat { position: static; height: auto; border-left: 0; border-top: 1px solid var(--border); } }
+.chat-head { padding: 14px 16px 10px; font-weight: 600; border-bottom: 1px solid var(--border); }
+.msgs { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.msg { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+.msg.queued { border: 1px dashed var(--border); background: transparent; }
+.who { display: flex; justify-content: space-between; gap: 6px; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+.composer { border-top: 1px solid var(--border); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.about { font-size: 12px; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.composer textarea { width: 100%; resize: vertical; font: inherit; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
+.btn.quiet { background: transparent; color: var(--accent); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+
+/* phones */
+@media (max-width: 900px) {
+  .viewport { height: 62vh; min-height: 380px; }
+  .legend .hint { margin-left: 0; }
+}
+
+/* collapsible context sections */
+details.ctx { border-top: 1px solid var(--border); }
+details.ctx > summary { list-style: none; cursor: pointer; padding: 4px 0; }
+details.ctx > summary::-webkit-details-marker { display: none; }
+details.ctx > summary h2 { display: inline-flex; gap: 8px; align-items: center; margin: 10px 0; }
+details.ctx > summary h2::before { content: "›"; color: var(--muted); transition: transform 0.15s; display: inline-block; }
+details.ctx[open] > summary h2::before { transform: rotate(90deg); }
+.count { font-size: 11px; font-weight: 500; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; }
+details.ctx[open] { padding-bottom: 12px; }
+.context { margin-top: 16px; }
+
+</style>
+</head>
+<body>
+<noscript><p class="noscript">This plan is drawn by an inline script. The plan data is in the #plan-doc block of this file.</p></noscript>
+<div id="app"></div>
+<script type="application/json" id="plan-doc">{"format":"plan-doc/1","title":"Signer delegation","intent":"Let a signer hand their signing over to someone else (an assistant, a colleague with signing authority). The sender should be told, and the audit log and certificate should show who delegated to whom.","mode":"plan","current":{"kind":"plan","name":"documenso","modules":[{"kind":"module","name":"Envelopes","purpose":"A document or template being prepared, sent and signed: its recipients, their fields and signatures, and the rules for who acts when.","depth":"mapped","sources":[{"path":"packages/prisma/schema.prisma","symbol":"Envelope"},{"path":"packages/lib/server-only/envelope/"},{"path":"packages/lib/server-only/document/"},{"path":"packages/lib/server-only/recipient/"},{"path":"packages/lib/server-only/field/"}],"note":"In code, document functions enqueue email jobs by name (jobs.triggerJob('send.signing.requested.email'), 22 files) and call triggerWebhook directly (17 files). The plan models both as events.","entities":[{"kind":"entity","name":"Envelope","sources":[{"path":"packages/prisma/schema.prisma","symbol":"Envelope","line":449}],"fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"teamId","type":{"kind":"prim","name":"int"}},{"name":"userId","type":{"kind":"prim","name":"int"}},{"name":"status","type":{"kind":"ref","name":"EnvelopeStatus"}},{"name":"title","type":{"kind":"prim","name":"string"}},{"name":"documentMetaId","type":{"kind":"prim","name":"string"}}],"key":["id"],"indexes":[{"fields":["teamId"]},{"fields":["status"]}]},{"kind":"entity","name":"DocumentMeta","doc":"Per-envelope settings. Team and organisation settings hold the defaults.","sources":[{"path":"packages/prisma/schema.prisma","symbol":"DocumentMeta","line":575}],"fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"signingOrder","type":{"kind":"ref","name":"SigningOrderMode"}},{"name":"allowDictateNextSigner","type":{"kind":"prim","name":"boolean"}},{"name":"distributionMethod","type":{"kind":"prim","name":"string"}}],"key":["id"],"indexes":[]},{"kind":"entity","name":"Recipient","sources":[{"path":"packages/prisma/schema.prisma","symbol":"Recipient","line":646}],"note":"Recipient rows are written from 29 files in 10 folders, including the document flows, templates, jobs and admin (grep for prisma/tx.recipient writes). The plan treats Envelopes as their one owner.","fields":[{"name":"id","type":{"kind":"prim","name":"int"}},{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"email","type":{"kind":"prim","name":"string"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"token","type":{"kind":"prim","name":"string"}},{"name":"role","type":{"kind":"ref","name":"RecipientRole"}},{"name":"signingStatus","type":{"kind":"ref","name":"SigningStatus"}},{"name":"signingOrder","type":{"kind":"optional","of":{"kind":"prim","name":"int"}}},{"name":"expiresAt","type":{"kind":"optional","of":{"kind":"prim","name":"datetime"}}}],"key":["id"],"indexes":[{"fields":["token"]},{"fields":["envelopeId"]},{"fields":["email"]}]},{"kind":"entity","name":"Field","sources":[{"path":"packages/prisma/schema.prisma","symbol":"Field","line":703}],"fields":[{"name":"id","type":{"kind":"prim","name":"int"}},{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}},{"name":"type","type":{"kind":"prim","name":"string"}},{"name":"inserted","type":{"kind":"prim","name":"boolean"}}],"key":["id"],"indexes":[{"fields":["envelopeId"]},{"fields":["recipientId"]}]},{"kind":"entity","name":"Signature","sources":[{"path":"packages/prisma/schema.prisma","symbol":"Signature","line":728}],"fields":[{"name":"id","type":{"kind":"prim","name":"int"}},{"name":"fieldId","type":{"kind":"prim","name":"int"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}},{"name":"created","type":{"kind":"prim","name":"datetime"}}],"key":["id"],"indexes":[{"fields":["fieldId"],"unique":true},{"fields":["recipientId"]}]}],"aggregates":[{"kind":"aggregate","name":"Envelope","root":"Envelope","members":["DocumentMeta","Recipient","Field","Signature"],"invariants":["Recipients can only act while the envelope is PENDING.","A recipient's signingStatus moves from NOT_SIGNED to SIGNED or REJECTED, never back.","Every field belongs to a recipient of the same envelope, and a signature only fills that recipient's field.","With SEQUENTIAL signing order, only recipients whose turn it is can act (SigningOrder decides)."]}],"repositories":[{"kind":"repository","name":"EnvelopeRepository","entity":"Envelope","methods":[{"kind":"get"},{"kind":"find","by":["teamId"]},{"kind":"find","by":["Recipient.token"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Envelopes","sources":[{"path":"packages/trpc/server/envelope-router/router.ts"},{"path":"packages/lib/server-only/document/send-document.ts","symbol":"sendDocument"}],"types":[{"kind":"enum","name":"EnvelopeStatus","values":["DRAFT","PENDING","COMPLETED","REJECTED","CANCELLED"]},{"kind":"enum","name":"RecipientRole","values":["SIGNER","APPROVER","VIEWER","ASSISTANT","CC"]},{"kind":"enum","name":"SigningStatus","values":["NOT_SIGNED","SIGNED","REJECTED"]},{"kind":"enum","name":"SigningOrderMode","values":["PARALLEL","SEQUENTIAL"]},{"kind":"record","name":"RecipientInput","fields":[{"name":"email","type":{"kind":"prim","name":"string"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"role","type":{"kind":"ref","name":"RecipientRole"}},{"name":"signingOrder","type":{"kind":"optional","of":{"kind":"prim","name":"int"}}}]},{"kind":"record","name":"RecipientView","fields":[{"name":"id","type":{"kind":"prim","name":"int"}},{"name":"email","type":{"kind":"prim","name":"string"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"role","type":{"kind":"ref","name":"RecipientRole"}},{"name":"signingStatus","type":{"kind":"ref","name":"SigningStatus"}}]},{"kind":"record","name":"EnvelopeSettings","fields":[{"name":"signingOrder","type":{"kind":"ref","name":"SigningOrderMode"}},{"name":"allowDictateNextSigner","type":{"kind":"prim","name":"boolean"}}]},{"kind":"record","name":"EnvelopeView","fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"title","type":{"kind":"prim","name":"string"}},{"name":"status","type":{"kind":"ref","name":"EnvelopeStatus"}},{"name":"recipients","type":{"kind":"list","of":{"kind":"ref","name":"RecipientView"}}}]}],"operations":[{"kind":"operation","name":"GetEnvelope","mode":"query","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}],"output":{"kind":"ref","name":"EnvelopeView"},"errors":["NotFound"]},{"kind":"operation","name":"SetRecipients","mode":"command","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipients","type":{"kind":"list","of":{"kind":"ref","name":"RecipientInput"}}}],"output":{"kind":"list","of":{"kind":"ref","name":"RecipientView"}},"errors":["NotFound","NotEditable"]},{"kind":"operation","name":"UpdateSettings","mode":"command","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"settings","type":{"kind":"ref","name":"EnvelopeSettings"}}],"output":null,"errors":["NotFound","NotEditable"]},{"kind":"operation","name":"Send","mode":"command","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}],"output":{"kind":"ref","name":"EnvelopeView"},"errors":["NotFound","AlreadySent","MissingFields"]},{"kind":"operation","name":"Cancel","mode":"command","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"reason","type":{"kind":"prim","name":"string"}}],"output":null,"errors":["NotFound","NotPending"]},{"kind":"operation","name":"ListAuditLog","mode":"query","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}],"output":{"kind":"list","of":{"kind":"ref","name":"AuditTrail.AuditEntry"}},"errors":["NotFound"]}],"events":[{"kind":"event","name":"SigningRequested","payload":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}}]},{"kind":"event","name":"RecipientCompleted","payload":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}}]},{"kind":"event","name":"RecipientRejected","payload":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}},{"name":"reason","type":{"kind":"prim","name":"string"}}]},{"kind":"event","name":"EnvelopeCompleted","payload":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}]},{"kind":"event","name":"EnvelopeRejected","payload":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}]}]},{"kind":"contract","name":"Signing","sources":[{"path":"packages/trpc/server/recipient-router/router.ts","symbol":"completeDocumentWithToken"},{"path":"packages/lib/server-only/document/reject-document-with-token.ts"}],"note":"Every operation here is authorised by the recipient's token, not a session.","types":[{"kind":"record","name":"SigningSession","fields":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}},{"name":"role","type":{"kind":"ref","name":"Envelopes.RecipientRole"}},{"name":"isTurn","type":{"kind":"prim","name":"boolean"}}]}],"operations":[{"kind":"operation","name":"GetSession","mode":"query","input":[{"name":"token","type":{"kind":"prim","name":"string"}}],"output":{"kind":"ref","name":"SigningSession"},"errors":["NotFound","Expired"]},{"kind":"operation","name":"SignField","mode":"command","input":[{"name":"token","type":{"kind":"prim","name":"string"}},{"name":"fieldId","type":{"kind":"prim","name":"int"}},{"name":"value","type":{"kind":"prim","name":"string"}}],"output":null,"errors":["NotFound","Expired","NotYourTurn","AlreadyInserted"]},{"kind":"operation","name":"Complete","mode":"command","input":[{"name":"token","type":{"kind":"prim","name":"string"}},{"name":"nextSignerEmail","type":{"kind":"optional","of":{"kind":"prim","name":"string"}}}],"output":null,"errors":["NotFound","Expired","NotYourTurn","MissingFields","AlreadyActioned"]},{"kind":"operation","name":"Reject","mode":"command","input":[{"name":"token","type":{"kind":"prim","name":"string"}},{"name":"reason","type":{"kind":"prim","name":"string"}}],"output":null,"errors":["NotFound","Expired","NotPending","AlreadyActioned"]}],"events":[]}],"uses":[{"contract":"SigningOrder","subscribes":[]},{"contract":"AuditTrail","subscribes":[]},{"contract":"Sealing","subscribes":[]},{"contract":"Accounts","subscribes":[]}],"modules":[{"kind":"module","name":"SigningOrder","purpose":"Decides whose turn it is. Pure rules over the recipients of one envelope; owns no data.","depth":"mapped","sources":[{"path":"packages/lib/server-only/recipient/get-is-recipient-turn.ts"},{"path":"packages/lib/server-only/recipient/get-next-pending-recipient.ts"},{"path":"packages/lib/utils/recipients.ts"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"SigningOrder","types":[],"operations":[{"kind":"operation","name":"IsRecipientTurn","mode":"query","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}}],"output":{"kind":"prim","name":"boolean"},"errors":[]},{"kind":"operation","name":"NextPendingRecipients","mode":"query","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}],"output":{"kind":"list","of":{"kind":"prim","name":"int"}},"errors":[]}],"events":[]}],"uses":[],"modules":[]},{"kind":"module","name":"AuditTrail","purpose":"Append-only record of everything that happened to an envelope. Feeds the signing certificate.","depth":"mapped","sources":[{"path":"packages/lib/types/document-audit-logs.ts"},{"path":"packages/lib/utils/document-audit-logs.ts","symbol":"createDocumentAuditLogData"}],"note":"In code every flow inserts DocumentAuditLog rows itself, inside the same Prisma transaction as the change it records.","entities":[{"kind":"entity","name":"DocumentAuditLog","doc":"type is a free-text column; the list of types lives in code, so adding one needs no migration.","fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"envelopeId","type":{"kind":"optional","of":{"kind":"prim","name":"string"}}},{"name":"type","type":{"kind":"prim","name":"string"}},{"name":"data","type":{"kind":"prim","name":"string"}},{"name":"email","type":{"kind":"optional","of":{"kind":"prim","name":"string"}}},{"name":"createdAt","type":{"kind":"prim","name":"datetime"}}],"key":["id"],"indexes":[{"fields":["envelopeId"]}]}],"aggregates":[],"repositories":[{"kind":"repository","name":"DocumentAuditLogRepository","entity":"DocumentAuditLog","methods":[{"kind":"save"},{"kind":"find","by":["envelopeId"]}]}],"provides":[{"kind":"contract","name":"AuditTrail","types":[{"kind":"enum","name":"AuditType","values":["DOCUMENT_SENT","DOCUMENT_OPENED","DOCUMENT_RECIPIENT_COMPLETED","DOCUMENT_RECIPIENT_REJECTED","RECIPIENT_UPDATED","DOCUMENT_COMPLETED"]},{"kind":"record","name":"AuditEntry","fields":[{"name":"type","type":{"kind":"ref","name":"AuditType"}},{"name":"actorEmail","type":{"kind":"prim","name":"string"}},{"name":"data","type":{"kind":"prim","name":"string"}}]}],"operations":[{"kind":"operation","name":"Append","mode":"command","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"entry","type":{"kind":"ref","name":"AuditEntry"}}],"output":null,"errors":[]},{"kind":"operation","name":"List","mode":"query","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}],"output":{"kind":"list","of":{"kind":"ref","name":"AuditEntry"}},"errors":[]}],"events":[]}],"uses":[],"modules":[]},{"kind":"module","name":"Sealing","purpose":"Burns signatures into the PDF and signs it once every recipient has acted.","depth":"stub","sources":[{"path":"packages/lib/jobs/definitions/internal/seal-document.handler.ts"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Sealing","types":[],"operations":[],"events":[]}],"uses":[],"modules":[]}]},{"kind":"module","name":"Emails","purpose":"Sends every email about an envelope: signing requests, confirmations, notices to the sender.","depth":"mapped","sources":[{"path":"packages/lib/jobs/definitions/emails/"},{"path":"packages/email/templates/"}],"note":"Each email is a background job whose handler reads the envelope through Prisma itself. Conceptually it reads through GetEnvelope.","entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[{"contract":"Envelopes","subscribes":["SigningRequested","RecipientCompleted","RecipientRejected","EnvelopeCompleted"]}],"modules":[]},{"kind":"module","name":"Webhooks","purpose":"Lets a team register URLs for envelope events, and delivers and logs each call.","depth":"mapped","sources":[{"path":"packages/lib/server-only/webhooks/"},{"path":"packages/lib/server-only/webhooks/trigger/trigger-webhook.ts","symbol":"triggerWebhook"}],"entities":[{"kind":"entity","name":"Webhook","sources":[{"path":"packages/prisma/schema.prisma","symbol":"Webhook","line":184}],"note":"Looked up by team and event on every trigger (get-all-webhooks-by-event-trigger.ts) with no index on teamId.","fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"teamId","type":{"kind":"prim","name":"int"}},{"name":"webhookUrl","type":{"kind":"prim","name":"string"}},{"name":"eventTriggers","type":{"kind":"list","of":{"kind":"ref","name":"WebhookEvent"}}},{"name":"enabled","type":{"kind":"prim","name":"boolean"}}],"key":["id"],"indexes":[]},{"kind":"entity","name":"WebhookCall","sources":[{"path":"packages/prisma/schema.prisma","symbol":"WebhookCall","line":204}],"fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"webhookId","type":{"kind":"prim","name":"string"}},{"name":"event","type":{"kind":"ref","name":"WebhookEvent"}},{"name":"status","type":{"kind":"prim","name":"string"}},{"name":"responseCode","type":{"kind":"prim","name":"int"}},{"name":"createdAt","type":{"kind":"prim","name":"datetime"}}],"key":["id"],"indexes":[]}],"aggregates":[],"repositories":[{"kind":"repository","name":"WebhookRepository","entity":"Webhook","methods":[{"kind":"get"},{"kind":"find","by":["teamId"]},{"kind":"save"}]},{"kind":"repository","name":"WebhookCallRepository","entity":"WebhookCall","methods":[{"kind":"find","by":["webhookId"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Webhooks","types":[{"kind":"enum","name":"WebhookEvent","values":["DOCUMENT_SENT","DOCUMENT_OPENED","DOCUMENT_SIGNED","DOCUMENT_RECIPIENT_COMPLETED","DOCUMENT_COMPLETED","DOCUMENT_REJECTED","DOCUMENT_CANCELLED","RECIPIENT_EXPIRED"]},{"kind":"record","name":"WebhookView","fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"webhookUrl","type":{"kind":"prim","name":"string"}},{"name":"eventTriggers","type":{"kind":"list","of":{"kind":"ref","name":"WebhookEvent"}}},{"name":"enabled","type":{"kind":"prim","name":"boolean"}}]}],"operations":[{"kind":"operation","name":"CreateWebhook","mode":"command","input":[{"name":"teamId","type":{"kind":"prim","name":"int"}},{"name":"webhookUrl","type":{"kind":"prim","name":"string"}},{"name":"eventTriggers","type":{"kind":"list","of":{"kind":"ref","name":"WebhookEvent"}}}],"output":{"kind":"ref","name":"WebhookView"},"errors":["InvalidUrl"]},{"kind":"operation","name":"ListForTeam","mode":"query","input":[{"name":"teamId","type":{"kind":"prim","name":"int"}}],"output":{"kind":"list","of":{"kind":"ref","name":"WebhookView"}},"errors":[]}],"events":[]}],"uses":[{"contract":"Envelopes","subscribes":["SigningRequested","RecipientCompleted","RecipientRejected","EnvelopeCompleted","EnvelopeRejected"]}],"modules":[]},{"kind":"module","name":"Accounts","purpose":"Users, teams and organisations, their members and the default settings a team gives new envelopes.","depth":"stub","sources":[{"path":"packages/lib/server-only/team/"},{"path":"packages/lib/server-only/organisation/"},{"path":"packages/lib/server-only/user/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Accounts","types":[],"operations":[],"events":[]}],"uses":[],"modules":[]},{"kind":"module","name":"Templates","purpose":"Reusable envelopes, direct links and bulk send. Creates envelopes from a template.","depth":"stub","sources":[{"path":"packages/lib/server-only/template/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[{"contract":"Envelopes","subscribes":[]}],"modules":[]},{"kind":"module","name":"Api","purpose":"The tRPC routes (API v2 and the app) and the ts-rest API v1. Thin: validates input and calls the contracts.","depth":"stub","sources":[{"path":"packages/trpc/server/"},{"path":"packages/api/v1/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[{"contract":"Envelopes","subscribes":[]},{"contract":"Signing","subscribes":[]},{"contract":"Webhooks","subscribes":[]},{"contract":"Accounts","subscribes":[]}],"modules":[]}]},"proposed":{"kind":"plan","name":"documenso","modules":[{"kind":"module","name":"Envelopes","purpose":"A document or template being prepared, sent and signed: its recipients, their fields and signatures, and the rules for who acts when.","depth":"mapped","sources":[{"path":"packages/prisma/schema.prisma","symbol":"Envelope"},{"path":"packages/lib/server-only/envelope/"},{"path":"packages/lib/server-only/document/"},{"path":"packages/lib/server-only/recipient/"},{"path":"packages/lib/server-only/field/"}],"note":"In code, document functions enqueue email jobs by name (jobs.triggerJob('send.signing.requested.email'), 22 files) and call triggerWebhook directly (17 files). The plan models both as events.","entities":[{"kind":"entity","name":"Envelope","sources":[{"path":"packages/prisma/schema.prisma","symbol":"Envelope","line":449}],"fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"teamId","type":{"kind":"prim","name":"int"}},{"name":"userId","type":{"kind":"prim","name":"int"}},{"name":"status","type":{"kind":"ref","name":"EnvelopeStatus"}},{"name":"title","type":{"kind":"prim","name":"string"}},{"name":"documentMetaId","type":{"kind":"prim","name":"string"}}],"key":["id"],"indexes":[{"fields":["teamId"]},{"fields":["status"]}]},{"kind":"entity","name":"DocumentMeta","doc":"Per-envelope settings. Team and organisation settings hold the defaults.","sources":[{"path":"packages/prisma/schema.prisma","symbol":"DocumentMeta","line":575}],"fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"signingOrder","type":{"kind":"ref","name":"SigningOrderMode"}},{"name":"allowDictateNextSigner","type":{"kind":"prim","name":"boolean"}},{"name":"distributionMethod","type":{"kind":"prim","name":"string"}},{"name":"allowDelegation","type":{"kind":"optional","of":{"kind":"prim","name":"boolean"}}}],"key":["id"],"indexes":[]},{"kind":"entity","name":"Recipient","sources":[{"path":"packages/prisma/schema.prisma","symbol":"Recipient","line":646}],"note":"Recipient rows are written from 29 files in 10 folders, including the document flows, templates, jobs and admin (grep for prisma/tx.recipient writes). The plan treats Envelopes as their one owner.","fields":[{"name":"id","type":{"kind":"prim","name":"int"}},{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"email","type":{"kind":"prim","name":"string"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"token","type":{"kind":"prim","name":"string"}},{"name":"role","type":{"kind":"ref","name":"RecipientRole"}},{"name":"signingStatus","type":{"kind":"ref","name":"SigningStatus"}},{"name":"signingOrder","type":{"kind":"optional","of":{"kind":"prim","name":"int"}}},{"name":"expiresAt","type":{"kind":"optional","of":{"kind":"prim","name":"datetime"}}},{"name":"delegatedFromId","type":{"kind":"optional","of":{"kind":"prim","name":"int"}}}],"key":["id"],"indexes":[{"fields":["token"]},{"fields":["envelopeId"]},{"fields":["email"]}]},{"kind":"entity","name":"Field","sources":[{"path":"packages/prisma/schema.prisma","symbol":"Field","line":703}],"fields":[{"name":"id","type":{"kind":"prim","name":"int"}},{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}},{"name":"type","type":{"kind":"prim","name":"string"}},{"name":"inserted","type":{"kind":"prim","name":"boolean"}}],"key":["id"],"indexes":[{"fields":["envelopeId"]},{"fields":["recipientId"]}]},{"kind":"entity","name":"Signature","sources":[{"path":"packages/prisma/schema.prisma","symbol":"Signature","line":728}],"fields":[{"name":"id","type":{"kind":"prim","name":"int"}},{"name":"fieldId","type":{"kind":"prim","name":"int"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}},{"name":"created","type":{"kind":"prim","name":"datetime"}}],"key":["id"],"indexes":[{"fields":["fieldId"],"unique":true},{"fields":["recipientId"]}]}],"aggregates":[{"kind":"aggregate","name":"Envelope","root":"Envelope","members":["DocumentMeta","Recipient","Field","Signature"],"invariants":["Recipients can only act while the envelope is PENDING.","A recipient's signingStatus moves from NOT_SIGNED to SIGNED, REJECTED or DELEGATED, never back.","Every field belongs to a recipient of the same envelope, and a signature only fills that recipient's field.","With SEQUENTIAL signing order, only recipients whose turn it is can act (SigningOrder decides).","Delegating creates a new recipient in the same signing position, moves the original's unfilled fields to it, and the original's token stops working.","Only a SIGNER or APPROVER who has not acted can delegate, and only when the envelope allows it."]}],"repositories":[{"kind":"repository","name":"EnvelopeRepository","entity":"Envelope","methods":[{"kind":"get"},{"kind":"find","by":["teamId"]},{"kind":"find","by":["Recipient.token"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Envelopes","sources":[{"path":"packages/trpc/server/envelope-router/router.ts"},{"path":"packages/lib/server-only/document/send-document.ts","symbol":"sendDocument"}],"types":[{"kind":"enum","name":"EnvelopeStatus","values":["DRAFT","PENDING","COMPLETED","REJECTED","CANCELLED"]},{"kind":"enum","name":"RecipientRole","values":["SIGNER","APPROVER","VIEWER","ASSISTANT","CC"]},{"kind":"enum","name":"SigningStatus","values":["NOT_SIGNED","SIGNED","REJECTED","DELEGATED"]},{"kind":"enum","name":"SigningOrderMode","values":["PARALLEL","SEQUENTIAL"]},{"kind":"record","name":"RecipientInput","fields":[{"name":"email","type":{"kind":"prim","name":"string"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"role","type":{"kind":"ref","name":"RecipientRole"}},{"name":"signingOrder","type":{"kind":"optional","of":{"kind":"prim","name":"int"}}}]},{"kind":"record","name":"RecipientView","fields":[{"name":"id","type":{"kind":"prim","name":"int"}},{"name":"email","type":{"kind":"prim","name":"string"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"role","type":{"kind":"ref","name":"RecipientRole"}},{"name":"signingStatus","type":{"kind":"ref","name":"SigningStatus"}},{"name":"delegatedFromId","type":{"kind":"optional","of":{"kind":"prim","name":"int"}}}]},{"kind":"record","name":"EnvelopeSettings","fields":[{"name":"signingOrder","type":{"kind":"ref","name":"SigningOrderMode"}},{"name":"allowDictateNextSigner","type":{"kind":"prim","name":"boolean"}},{"name":"allowDelegation","type":{"kind":"optional","of":{"kind":"prim","name":"boolean"}}}]},{"kind":"record","name":"EnvelopeView","fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"title","type":{"kind":"prim","name":"string"}},{"name":"status","type":{"kind":"ref","name":"EnvelopeStatus"}},{"name":"recipients","type":{"kind":"list","of":{"kind":"ref","name":"RecipientView"}}}]}],"operations":[{"kind":"operation","name":"GetEnvelope","mode":"query","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}],"output":{"kind":"ref","name":"EnvelopeView"},"errors":["NotFound"]},{"kind":"operation","name":"SetRecipients","mode":"command","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipients","type":{"kind":"list","of":{"kind":"ref","name":"RecipientInput"}}}],"output":{"kind":"list","of":{"kind":"ref","name":"RecipientView"}},"errors":["NotFound","NotEditable"]},{"kind":"operation","name":"UpdateSettings","mode":"command","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"settings","type":{"kind":"ref","name":"EnvelopeSettings"}}],"output":null,"errors":["NotFound","NotEditable"]},{"kind":"operation","name":"Send","mode":"command","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}],"output":{"kind":"ref","name":"EnvelopeView"},"errors":["NotFound","AlreadySent","MissingFields"]},{"kind":"operation","name":"Cancel","mode":"command","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"reason","type":{"kind":"prim","name":"string"}}],"output":null,"errors":["NotFound","NotPending"]},{"kind":"operation","name":"ListAuditLog","mode":"query","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}],"output":{"kind":"list","of":{"kind":"ref","name":"AuditTrail.AuditEntry"}},"errors":["NotFound"]}],"events":[{"kind":"event","name":"SigningRequested","payload":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}}]},{"kind":"event","name":"RecipientCompleted","payload":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}}]},{"kind":"event","name":"RecipientRejected","payload":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}},{"name":"reason","type":{"kind":"prim","name":"string"}}]},{"kind":"event","name":"EnvelopeCompleted","payload":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}]},{"kind":"event","name":"EnvelopeRejected","payload":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}]},{"kind":"event","name":"RecipientDelegated","payload":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"fromRecipientId","type":{"kind":"prim","name":"int"}},{"name":"toRecipientId","type":{"kind":"prim","name":"int"}},{"name":"reason","type":{"kind":"optional","of":{"kind":"prim","name":"string"}}}]}]},{"kind":"contract","name":"Signing","sources":[{"path":"packages/trpc/server/recipient-router/router.ts","symbol":"completeDocumentWithToken"},{"path":"packages/lib/server-only/document/reject-document-with-token.ts"}],"note":"Every operation here is authorised by the recipient's token, not a session.","types":[{"kind":"record","name":"SigningSession","fields":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}},{"name":"role","type":{"kind":"ref","name":"Envelopes.RecipientRole"}},{"name":"isTurn","type":{"kind":"prim","name":"boolean"}}]},{"kind":"record","name":"DelegateTo","fields":[{"name":"email","type":{"kind":"prim","name":"string"}},{"name":"name","type":{"kind":"prim","name":"string"}},{"name":"reason","type":{"kind":"optional","of":{"kind":"prim","name":"string"}}}]}],"operations":[{"kind":"operation","name":"GetSession","mode":"query","input":[{"name":"token","type":{"kind":"prim","name":"string"}}],"output":{"kind":"ref","name":"SigningSession"},"errors":["NotFound","Expired"]},{"kind":"operation","name":"SignField","mode":"command","input":[{"name":"token","type":{"kind":"prim","name":"string"}},{"name":"fieldId","type":{"kind":"prim","name":"int"}},{"name":"value","type":{"kind":"prim","name":"string"}}],"output":null,"errors":["NotFound","Expired","NotYourTurn","AlreadyInserted"]},{"kind":"operation","name":"Complete","mode":"command","input":[{"name":"token","type":{"kind":"prim","name":"string"}},{"name":"nextSignerEmail","type":{"kind":"optional","of":{"kind":"prim","name":"string"}}}],"output":null,"errors":["NotFound","Expired","NotYourTurn","MissingFields","AlreadyActioned"]},{"kind":"operation","name":"Reject","mode":"command","input":[{"name":"token","type":{"kind":"prim","name":"string"}},{"name":"reason","type":{"kind":"prim","name":"string"}}],"output":null,"errors":["NotFound","Expired","NotPending","AlreadyActioned"]},{"kind":"operation","name":"Delegate","mode":"command","input":[{"name":"token","type":{"kind":"prim","name":"string"}},{"name":"to","type":{"kind":"ref","name":"DelegateTo"}}],"output":{"kind":"prim","name":"int"},"errors":["NotFound","Expired","NotPending","AlreadyActioned","NotYourTurn","DelegationNotAllowed","AlreadyARecipient"]}],"events":[]}],"uses":[{"contract":"SigningOrder","subscribes":[]},{"contract":"AuditTrail","subscribes":[]},{"contract":"Sealing","subscribes":[]},{"contract":"Accounts","subscribes":[]}],"modules":[{"kind":"module","name":"SigningOrder","purpose":"Decides whose turn it is. Pure rules over the recipients of one envelope; owns no data.","depth":"mapped","sources":[{"path":"packages/lib/server-only/recipient/get-is-recipient-turn.ts"},{"path":"packages/lib/server-only/recipient/get-next-pending-recipient.ts"},{"path":"packages/lib/utils/recipients.ts"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"SigningOrder","types":[],"operations":[{"kind":"operation","name":"IsRecipientTurn","mode":"query","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"recipientId","type":{"kind":"prim","name":"int"}}],"output":{"kind":"prim","name":"boolean"},"errors":[]},{"kind":"operation","name":"NextPendingRecipients","mode":"query","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}],"output":{"kind":"list","of":{"kind":"prim","name":"int"}},"errors":[]}],"events":[]}],"uses":[],"modules":[]},{"kind":"module","name":"AuditTrail","purpose":"Append-only record of everything that happened to an envelope. Feeds the signing certificate.","depth":"mapped","sources":[{"path":"packages/lib/types/document-audit-logs.ts"},{"path":"packages/lib/utils/document-audit-logs.ts","symbol":"createDocumentAuditLogData"}],"note":"In code every flow inserts DocumentAuditLog rows itself, inside the same Prisma transaction as the change it records.","entities":[{"kind":"entity","name":"DocumentAuditLog","doc":"type is a free-text column; the list of types lives in code, so adding one needs no migration.","fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"envelopeId","type":{"kind":"optional","of":{"kind":"prim","name":"string"}}},{"name":"type","type":{"kind":"prim","name":"string"}},{"name":"data","type":{"kind":"prim","name":"string"}},{"name":"email","type":{"kind":"optional","of":{"kind":"prim","name":"string"}}},{"name":"createdAt","type":{"kind":"prim","name":"datetime"}}],"key":["id"],"indexes":[{"fields":["envelopeId"]}]}],"aggregates":[],"repositories":[{"kind":"repository","name":"DocumentAuditLogRepository","entity":"DocumentAuditLog","methods":[{"kind":"save"},{"kind":"find","by":["envelopeId"]}]}],"provides":[{"kind":"contract","name":"AuditTrail","types":[{"kind":"enum","name":"AuditType","values":["DOCUMENT_SENT","DOCUMENT_OPENED","DOCUMENT_RECIPIENT_COMPLETED","DOCUMENT_RECIPIENT_REJECTED","DOCUMENT_RECIPIENT_DELEGATED","RECIPIENT_UPDATED","DOCUMENT_COMPLETED"]},{"kind":"record","name":"AuditEntry","fields":[{"name":"type","type":{"kind":"ref","name":"AuditType"}},{"name":"actorEmail","type":{"kind":"prim","name":"string"}},{"name":"data","type":{"kind":"prim","name":"string"}}]}],"operations":[{"kind":"operation","name":"Append","mode":"command","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}},{"name":"entry","type":{"kind":"ref","name":"AuditEntry"}}],"output":null,"errors":[]},{"kind":"operation","name":"List","mode":"query","input":[{"name":"envelopeId","type":{"kind":"prim","name":"string"}}],"output":{"kind":"list","of":{"kind":"ref","name":"AuditEntry"}},"errors":[]}],"events":[]}],"uses":[],"modules":[]},{"kind":"module","name":"Sealing","purpose":"Burns signatures into the PDF and signs it once every recipient has acted.","depth":"stub","sources":[{"path":"packages/lib/jobs/definitions/internal/seal-document.handler.ts"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Sealing","types":[],"operations":[],"events":[]}],"uses":[],"modules":[]}]},{"kind":"module","name":"Emails","purpose":"Sends every email about an envelope: signing requests, confirmations, notices to the sender.","depth":"mapped","sources":[{"path":"packages/lib/jobs/definitions/emails/"},{"path":"packages/email/templates/"}],"note":"Each email is a background job whose handler reads the envelope through Prisma itself. Conceptually it reads through GetEnvelope.","entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[{"contract":"Envelopes","subscribes":["SigningRequested","RecipientCompleted","RecipientRejected","EnvelopeCompleted","RecipientDelegated"]}],"modules":[]},{"kind":"module","name":"Webhooks","purpose":"Lets a team register URLs for envelope events, and delivers and logs each call.","depth":"mapped","sources":[{"path":"packages/lib/server-only/webhooks/"},{"path":"packages/lib/server-only/webhooks/trigger/trigger-webhook.ts","symbol":"triggerWebhook"}],"entities":[{"kind":"entity","name":"Webhook","sources":[{"path":"packages/prisma/schema.prisma","symbol":"Webhook","line":184}],"note":"Looked up by team and event on every trigger (get-all-webhooks-by-event-trigger.ts) with no index on teamId.","fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"teamId","type":{"kind":"prim","name":"int"}},{"name":"webhookUrl","type":{"kind":"prim","name":"string"}},{"name":"eventTriggers","type":{"kind":"list","of":{"kind":"ref","name":"WebhookEvent"}}},{"name":"enabled","type":{"kind":"prim","name":"boolean"}}],"key":["id"],"indexes":[]},{"kind":"entity","name":"WebhookCall","sources":[{"path":"packages/prisma/schema.prisma","symbol":"WebhookCall","line":204}],"fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"webhookId","type":{"kind":"prim","name":"string"}},{"name":"event","type":{"kind":"ref","name":"WebhookEvent"}},{"name":"status","type":{"kind":"prim","name":"string"}},{"name":"responseCode","type":{"kind":"prim","name":"int"}},{"name":"createdAt","type":{"kind":"prim","name":"datetime"}}],"key":["id"],"indexes":[]}],"aggregates":[],"repositories":[{"kind":"repository","name":"WebhookRepository","entity":"Webhook","methods":[{"kind":"get"},{"kind":"find","by":["teamId"]},{"kind":"save"}]},{"kind":"repository","name":"WebhookCallRepository","entity":"WebhookCall","methods":[{"kind":"find","by":["webhookId"]},{"kind":"save"}]}],"provides":[{"kind":"contract","name":"Webhooks","types":[{"kind":"enum","name":"WebhookEvent","values":["DOCUMENT_SENT","DOCUMENT_OPENED","DOCUMENT_SIGNED","DOCUMENT_RECIPIENT_COMPLETED","DOCUMENT_COMPLETED","DOCUMENT_REJECTED","DOCUMENT_CANCELLED","RECIPIENT_EXPIRED","RECIPIENT_DELEGATED"]},{"kind":"record","name":"WebhookView","fields":[{"name":"id","type":{"kind":"prim","name":"string"}},{"name":"webhookUrl","type":{"kind":"prim","name":"string"}},{"name":"eventTriggers","type":{"kind":"list","of":{"kind":"ref","name":"WebhookEvent"}}},{"name":"enabled","type":{"kind":"prim","name":"boolean"}}]}],"operations":[{"kind":"operation","name":"CreateWebhook","mode":"command","input":[{"name":"teamId","type":{"kind":"prim","name":"int"}},{"name":"webhookUrl","type":{"kind":"prim","name":"string"}},{"name":"eventTriggers","type":{"kind":"list","of":{"kind":"ref","name":"WebhookEvent"}}}],"output":{"kind":"ref","name":"WebhookView"},"errors":["InvalidUrl"]},{"kind":"operation","name":"ListForTeam","mode":"query","input":[{"name":"teamId","type":{"kind":"prim","name":"int"}}],"output":{"kind":"list","of":{"kind":"ref","name":"WebhookView"}},"errors":[]}],"events":[]}],"uses":[{"contract":"Envelopes","subscribes":["SigningRequested","RecipientCompleted","RecipientRejected","EnvelopeCompleted","EnvelopeRejected","RecipientDelegated"]}],"modules":[]},{"kind":"module","name":"Accounts","purpose":"Users, teams and organisations, their members and the default settings a team gives new envelopes.","depth":"stub","sources":[{"path":"packages/lib/server-only/team/"},{"path":"packages/lib/server-only/organisation/"},{"path":"packages/lib/server-only/user/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Accounts","types":[],"operations":[],"events":[]}],"uses":[],"modules":[]},{"kind":"module","name":"Templates","purpose":"Reusable envelopes, direct links and bulk send. Creates envelopes from a template.","depth":"stub","sources":[{"path":"packages/lib/server-only/template/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[{"contract":"Envelopes","subscribes":[]}],"modules":[]},{"kind":"module","name":"Api","purpose":"The tRPC routes (API v2 and the app) and the ts-rest API v1. Thin: validates input and calls the contracts.","depth":"stub","sources":[{"path":"packages/trpc/server/"},{"path":"packages/api/v1/"}],"entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[{"contract":"Envelopes","subscribes":[]},{"contract":"Signing","subscribes":[]},{"contract":"Webhooks","subscribes":[]},{"contract":"Accounts","subscribes":[]}],"modules":[]}]},"slices":[{"name":"Delegation in the data","goal":"Add the DELEGATED status, the delegatedFromId link and the allowDelegation setting, with their migrations. Senders can switch the setting on; nothing reads it yet.","nodes":["Envelopes/entity/Recipient","Envelopes/entity/DocumentMeta","Envelopes/contract/Envelopes/type/SigningStatus","Envelopes/contract/Envelopes/type/EnvelopeSettings","Envelopes/contract/Envelopes/type/RecipientView"],"notes":"Adding DELEGATED to SigningStatus breaks exhaustive switches in the API schemas and the signing UI; find them in this slice."},{"name":"A signer can delegate","goal":"Signing.Delegate creates the new recipient, moves the fields, kills the old token, writes the audit entry and emits RecipientDelegated. The delegate gets the usual signing request.","nodes":["Envelopes/contract/Signing/Delegate","Envelopes/contract/Signing/type/DelegateTo","Envelopes/contract/Envelopes/RecipientDelegated","Envelopes/AuditTrail/contract/AuditTrail/type/AuditType","Envelopes/aggregate/Envelope"]},{"name":"Everyone hears about it","goal":"The sender gets an email and teams can subscribe a webhook to RECIPIENT_DELEGATED.","nodes":["Emails","Webhooks","Webhooks/contract/Webhooks/type/WebhookEvent","Webhooks/entity/Webhook","Webhooks/entity/WebhookCall"]}],"questions":[{"text":"If the original signer had access auth (account login or 2FA), what does the delegate get?","node":"Envelopes/contract/Signing/Delegate","options":["Same auth as the original","No auth, sender can add it","Block delegation for those signers"]},{"text":"Can a delegate delegate again?","node":"Envelopes/aggregate/Envelope","options":["No, one hop only","Yes, any number of times"]},{"text":"Should delegation default to on for teams that already allow dictating the next signer?","node":"Envelopes/entity/DocumentMeta","options":["Off for everyone","Follow allowDictateNextSigner"]}],"decisions":[{"text":"Delegation adds a new recipient row and marks the original DELEGATED, rather than editing the original's name and email.","why":"Dictating the next signer edits in place (complete-document-with-token.ts:483), which is safe because that recipient was never sent a link. Here the original already holds a live link, and the certificate has to show both people, so the old row and token must stay as history.","node":"Envelopes/entity/Recipient"},{"text":"Delegate lives on the Signing contract, authorised by the signer's token, not on the sender's Envelopes contract.","why":"It is the recipient who acts. A sender replacing a recipient is already covered by SetRecipients.","node":"Envelopes/contract/Signing"},{"text":"Emails and Webhooks learn about delegation through a RecipientDelegated event, as they do for rejection.","why":"Envelopes should not know which emails exist. In code this is still a direct job trigger, the same as rejection today.","node":"Envelopes/contract/Envelopes/RecipientDelegated"}],"facts":{"Envelopes/entity/Recipient":[{"label":"Files writing Recipient rows","value":29,"detail":"grep for (prisma|tx).recipient.(update|create|delete|upsert…), excluding e2e tests"}],"Envelopes":[{"label":"Files enqueueing email jobs","value":22,"detail":"grep for name: 'send. in lib/server-only, trpc and apps"},{"label":"Files calling triggerWebhook","value":17,"detail":"grep, excluding e2e tests"}]}}</script>
+<script type="text/plain" id="plan-outline">
+# plan: Signer delegation (plan)
+# intent: Let a signer hand their signing over to someone else (an assistant, a colleague with signing authority). The sender should be told, and the audit log and certificate should show who delegated to whom.
+# describes: the system after the change
+#
+# rules the code must follow:
+# - a module touches only its own tables; other modules' data is reached through their contract
+# - a module calls only contracts listed in its `uses` line
+# - contract types never expose a table type
+# - each contract operation, event and type exists in code with this shape; `!` lists the errors it can return
+# - a sub-module (indented module) is internal to its parent: only the parent and its siblings may use its contract
+# - an aggregate is loaded and saved whole through its root; its other tables have no repository of their own,
+#   and the invariants listed under it hold whenever it is saved
+# - [stub] modules are named only; their insides are not specified
+
+module [Envelopes] — A document or template being prepared, sent and signed: its recipients, their fields and signatures, and the rules for who acts when.
+  src: packages/prisma/schema.prisma#Envelope, packages/lib/server-only/envelope/, packages/lib/server-only/document/, packages/lib/server-only/recipient/, packages/lib/server-only/field/
+  note: In code, document functions enqueue email jobs by name (jobs.triggerJob('send.signing.requested.email'), 22 files) and call triggerWebhook directly (17 files). The plan models both as events.
+  uses: SigningOrder; AuditTrail; Sealing; Accounts
+  aggregate [Envelopes/aggregate/Envelope] root Envelope + DocumentMeta, Recipient, Field, Signature
+    invariant: Recipients can only act while the envelope is PENDING.
+    invariant: A recipient's signingStatus moves from NOT_SIGNED to SIGNED, REJECTED or DELEGATED, never back.
+    invariant: Every field belongs to a recipient of the same envelope, and a signature only fills that recipient's field.
+    invariant: With SEQUENTIAL signing order, only recipients whose turn it is can act (SigningOrder decides).
+    invariant: Delegating creates a new recipient in the same signing position, moves the original's unfilled fields to it, and the original's token stops working.
+    invariant: Only a SIGNER or APPROVER who has not acted can delegate, and only when the envelope allows it.
+  table [Envelopes/entity/Envelope] { id: string, teamId: int, userId: int, status: EnvelopeStatus, title: string, documentMetaId: string } key(id) index (teamId) (status) access get find(teamId) find(Recipient.token) save
+  table [Envelopes/entity/DocumentMeta] { id: string, signingOrder: SigningOrderMode, allowDictateNextSigner: boolean, distributionMethod: string, allowDelegation: boolean | null } key(id)
+  table [Envelopes/entity/Recipient] { id: int, envelopeId: string, email: string, name: string, token: string, role: RecipientRole, signingStatus: SigningStatus, signingOrder: int | null, expiresAt: datetime | null, delegatedFromId: int | null } key(id) index (token) (envelopeId) (email)
+  table [Envelopes/entity/Field] { id: int, envelopeId: string, recipientId: int, type: string, inserted: boolean } key(id) index (envelopeId) (recipientId)
+  table [Envelopes/entity/Signature] { id: int, fieldId: int, recipientId: int, created: datetime } key(id) index unique (fieldId) (recipientId)
+  contract [Envelopes/contract/Envelopes]
+    type [Envelopes/contract/Envelopes/type/EnvelopeStatus] = "DRAFT" | "PENDING" | "COMPLETED" | "REJECTED" | "CANCELLED"
+    type [Envelopes/contract/Envelopes/type/RecipientRole] = "SIGNER" | "APPROVER" | "VIEWER" | "ASSISTANT" | "CC"
+    type [Envelopes/contract/Envelopes/type/SigningStatus] = "NOT_SIGNED" | "SIGNED" | "REJECTED" | "DELEGATED"
+    type [Envelopes/contract/Envelopes/type/SigningOrderMode] = "PARALLEL" | "SEQUENTIAL"
+    type [Envelopes/contract/Envelopes/type/RecipientInput] = { email: string, name: string, role: RecipientRole, signingOrder: int | null }
+    type [Envelopes/contract/Envelopes/type/RecipientView] = { id: int, email: string, name: string, role: RecipientRole, signingStatus: SigningStatus, delegatedFromId: int | null }
+    type [Envelopes/contract/Envelopes/type/EnvelopeSettings] = { signingOrder: SigningOrderMode, allowDictateNextSigner: boolean, allowDelegation: boolean | null }
+    type [Envelopes/contract/Envelopes/type/EnvelopeView] = { id: string, title: string, status: EnvelopeStatus, recipients: RecipientView[] }
+    query [Envelopes/contract/Envelopes/GetEnvelope] (envelopeId: string) => EnvelopeView ! NotFound
+    cmd [Envelopes/contract/Envelopes/SetRecipients] (envelopeId: string, recipients: RecipientInput[]) => RecipientView[] ! NotFound | NotEditable
+    cmd [Envelopes/contract/Envelopes/UpdateSettings] (envelopeId: string, settings: EnvelopeSettings) => void ! NotFound | NotEditable
+    cmd [Envelopes/contract/Envelopes/Send] (envelopeId: string) => EnvelopeView ! NotFound | AlreadySent | MissingFields
+    cmd [Envelopes/contract/Envelopes/Cancel] (envelopeId: string, reason: string) => void ! NotFound | NotPending
+    query [Envelopes/contract/Envelopes/ListAuditLog] (envelopeId: string) => AuditTrail.AuditEntry[] ! NotFound
+    event [Envelopes/contract/Envelopes/SigningRequested] { envelopeId: string, recipientId: int }
+    event [Envelopes/contract/Envelopes/RecipientCompleted] { envelopeId: string, recipientId: int }
+    event [Envelopes/contract/Envelopes/RecipientRejected] { envelopeId: string, recipientId: int, reason: string }
+    event [Envelopes/contract/Envelopes/EnvelopeCompleted] { envelopeId: string }
+    event [Envelopes/contract/Envelopes/EnvelopeRejected] { envelopeId: string }
+    event [Envelopes/contract/Envelopes/RecipientDelegated] { envelopeId: string, fromRecipientId: int, toRecipientId: int, reason: string | null }
+  contract [Envelopes/contract/Signing]
+    type [Envelopes/contract/Signing/type/SigningSession] = { envelopeId: string, recipientId: int, role: Envelopes.RecipientRole, isTurn: boolean }
+    type [Envelopes/contract/Signing/type/DelegateTo] = { email: string, name: string, reason: string | null }
+    query [Envelopes/contract/Signing/GetSession] (token: string) => SigningSession ! NotFound | Expired
+    cmd [Envelopes/contract/Signing/SignField] (token: string, fieldId: int, value: string) => void ! NotFound | Expired | NotYourTurn | AlreadyInserted
+    cmd [Envelopes/contract/Signing/Complete] (token: string, nextSignerEmail: string | null) => void ! NotFound | Expired | NotYourTurn | MissingFields | AlreadyActioned
+    cmd [Envelopes/contract/Signing/Reject] (token: string, reason: string) => void ! NotFound | Expired | NotPending | AlreadyActioned
+    cmd [Envelopes/contract/Signing/Delegate] (token: string, to: DelegateTo) => int ! NotFound | Expired | NotPending | AlreadyActioned | NotYourTurn | DelegationNotAllowed | AlreadyARecipient
+  module [Envelopes/SigningOrder] — Decides whose turn it is. Pure rules over the recipients of one envelope; owns no data.
+    src: packages/lib/server-only/recipient/get-is-recipient-turn.ts, packages/lib/server-only/recipient/get-next-pending-recipient.ts, packages/lib/utils/recipients.ts
+    uses: nothing
+    contract [Envelopes/SigningOrder/contract/SigningOrder]
+      query [Envelopes/SigningOrder/contract/SigningOrder/IsRecipientTurn] (envelopeId: string, recipientId: int) => boolean
+      query [Envelopes/SigningOrder/contract/SigningOrder/NextPendingRecipients] (envelopeId: string) => int[]
+  module [Envelopes/AuditTrail] — Append-only record of everything that happened to an envelope. Feeds the signing certificate.
+    src: packages/lib/types/document-audit-logs.ts, packages/lib/utils/document-audit-logs.ts#createDocumentAuditLogData
+    note: In code every flow inserts DocumentAuditLog rows itself, inside the same Prisma transaction as the change it records.
+    uses: nothing
+    table [Envelopes/AuditTrail/entity/DocumentAuditLog] { id: string, envelopeId: string | null, type: string, data: string, email: string | null, createdAt: datetime } key(id) index (envelopeId) access save find(envelopeId)
+    contract [Envelopes/AuditTrail/contract/AuditTrail]
+      type [Envelopes/AuditTrail/contract/AuditTrail/type/AuditType] = "DOCUMENT_SENT" | "DOCUMENT_OPENED" | "DOCUMENT_RECIPIENT_COMPLETED" | "DOCUMENT_RECIPIENT_REJECTED" | "DOCUMENT_RECIPIENT_DELEGATED" | "RECIPIENT_UPDATED" | "DOCUMENT_COMPLETED"
+      type [Envelopes/AuditTrail/contract/AuditTrail/type/AuditEntry] = { type: AuditType, actorEmail: string, data: string }
+      cmd [Envelopes/AuditTrail/contract/AuditTrail/Append] (envelopeId: string, entry: AuditEntry) => void
+      query [Envelopes/AuditTrail/contract/AuditTrail/List] (envelopeId: string) => AuditEntry[]
+  module [Envelopes/Sealing] [stub] — Burns signatures into the PDF and signs it once every recipient has acted.
+    src: packages/lib/jobs/definitions/internal/seal-document.handler.ts
+    uses: nothing
+    contract [Envelopes/Sealing/contract/Sealing] (not mapped)
+module [Emails] — Sends every email about an envelope: signing requests, confirmations, notices to the sender.
+  src: packages/lib/jobs/definitions/emails/, packages/email/templates/
+  note: Each email is a background job whose handler reads the envelope through Prisma itself. Conceptually it reads through GetEnvelope.
+  uses: Envelopes (on SigningRequested, RecipientCompleted, RecipientRejected, EnvelopeCompleted, RecipientDelegated)
+module [Webhooks] — Lets a team register URLs for envelope events, and delivers and logs each call.
+  src: packages/lib/server-only/webhooks/, packages/lib/server-only/webhooks/trigger/trigger-webhook.ts#triggerWebhook
+  uses: Envelopes (on SigningRequested, RecipientCompleted, RecipientRejected, EnvelopeCompleted, EnvelopeRejected, RecipientDelegated)
+  table [Webhooks/entity/Webhook] { id: string, teamId: int, webhookUrl: string, eventTriggers: WebhookEvent[], enabled: boolean } key(id) access get find(teamId) save
+  table [Webhooks/entity/WebhookCall] { id: string, webhookId: string, event: WebhookEvent, status: string, responseCode: int, createdAt: datetime } key(id) access find(webhookId) save
+  contract [Webhooks/contract/Webhooks]
+    type [Webhooks/contract/Webhooks/type/WebhookEvent] = "DOCUMENT_SENT" | "DOCUMENT_OPENED" | "DOCUMENT_SIGNED" | "DOCUMENT_RECIPIENT_COMPLETED" | "DOCUMENT_COMPLETED" | "DOCUMENT_REJECTED" | "DOCUMENT_CANCELLED" | "RECIPIENT_EXPIRED" | "RECIPIENT_DELEGATED"
+    type [Webhooks/contract/Webhooks/type/WebhookView] = { id: string, webhookUrl: string, eventTriggers: WebhookEvent[], enabled: boolean }
+    cmd [Webhooks/contract/Webhooks/CreateWebhook] (teamId: int, webhookUrl: string, eventTriggers: WebhookEvent[]) => WebhookView ! InvalidUrl
+    query [Webhooks/contract/Webhooks/ListForTeam] (teamId: int) => WebhookView[]
+module [Accounts] [stub] — Users, teams and organisations, their members and the default settings a team gives new envelopes.
+  src: packages/lib/server-only/team/, packages/lib/server-only/organisation/, packages/lib/server-only/user/
+  uses: nothing
+  contract [Accounts/contract/Accounts] (not mapped)
+module [Templates] [stub] — Reusable envelopes, direct links and bulk send. Creates envelopes from a template.
+  src: packages/lib/server-only/template/
+  uses: Envelopes
+module [Api] [stub] — The tRPC routes (API v2 and the app) and the ts-rest API v1. Thin: validates input and calls the contracts.
+  src: packages/trpc/server/, packages/api/v1/
+  uses: Envelopes; Signing; Webhooks; Accounts
+
+changes (from current):
+  [Envelopes/AuditTrail/contract/AuditTrail/type/AuditType] breaking: gains value "DOCUMENT_RECIPIENT_DELEGATED" (exhaustive switches must handle it)
+  [Envelopes/entity/DocumentMeta] migration: add column allowDelegation: boolean?
+  [Envelopes/entity/Recipient] migration: add column delegatedFromId: int?
+  [Envelopes/aggregate/Envelope] internal: new invariant: A recipient's signingStatus moves from NOT_SIGNED to SIGNED, REJECTED or DELEGATED, never back.
+  [Envelopes/aggregate/Envelope] internal: new invariant: Delegating creates a new recipient in the same signing position, moves the original's unfilled fields to it, and the original's token stops working.
+  [Envelopes/aggregate/Envelope] internal: new invariant: Only a SIGNER or APPROVER who has not acted can delegate, and only when the envelope allows it.
+  [Envelopes/contract/Envelopes/type/SigningStatus] breaking: gains value "DELEGATED" (exhaustive switches must handle it)
+  [Envelopes/contract/Envelopes/type/RecipientView] additive: gains field delegatedFromId
+  [Envelopes/contract/Envelopes/type/EnvelopeSettings] additive: gains field allowDelegation
+  [Envelopes/contract/Envelopes/RecipientDelegated] additive: new event
+  [Envelopes/contract/Signing/type/DelegateTo] additive: new type
+  [Envelopes/contract/Signing/Delegate] additive: new command
+  [Envelopes/entity/Recipient] migration: signingStatus: database enum gains "DELEGATED"
+  [Emails] internal: now reacts to Envelopes.RecipientDelegated
+  [Webhooks] internal: now reacts to Envelopes.RecipientDelegated
+  [Webhooks/contract/Webhooks/type/WebhookEvent] breaking: gains value "RECIPIENT_DELEGATED" (exhaustive switches must handle it)
+  [Webhooks/entity/Webhook] migration: eventTriggers: database enum gains "RECIPIENT_DELEGATED"
+  [Webhooks/entity/WebhookCall] migration: event: database enum gains "RECIPIENT_DELEGATED"
+
+phases:
+  1. Delegation in the data: Add the DELEGATED status, the delegatedFromId link and the allowDelegation setting, with their migrations. Senders can switch the setting on; nothing reads it yet.
+     nodes: Envelopes/entity/Recipient, Envelopes/entity/DocumentMeta, Envelopes/contract/Envelopes/type/SigningStatus, Envelopes/contract/Envelopes/type/EnvelopeSettings, Envelopes/contract/Envelopes/type/RecipientView
+     note: Adding DELEGATED to SigningStatus breaks exhaustive switches in the API schemas and the signing UI; find them in this slice.
+  2. A signer can delegate: Signing.Delegate creates the new recipient, moves the fields, kills the old token, writes the audit entry and emits RecipientDelegated. The delegate gets the usual signing request.
+     nodes: Envelopes/contract/Signing/Delegate, Envelopes/contract/Signing/type/DelegateTo, Envelopes/contract/Envelopes/RecipientDelegated, Envelopes/AuditTrail/contract/AuditTrail/type/AuditType, Envelopes/aggregate/Envelope
+  3. Everyone hears about it: The sender gets an email and teams can subscribe a webhook to RECIPIENT_DELEGATED.
+     nodes: Emails, Webhooks, Webhooks/contract/Webhooks/type/WebhookEvent, Webhooks/entity/Webhook, Webhooks/entity/WebhookCall
+
+decisions:
+  [Envelopes/entity/Recipient] Delegation adds a new recipient row and marks the original DELEGATED, rather than editing the original's name and email. (because: Dictating the next signer edits in place (complete-document-with-token.ts:483), which is safe because that recipient was never sent a link. Here the original already holds a live link, and the certificate has to show both people, so the old row and token must stay as history.)
+  [Envelopes/contract/Signing] Delegate lives on the Signing contract, authorised by the signer's token, not on the sender's Envelopes contract. (because: It is the recipient who acts. A sender replacing a recipient is already covered by SetRecipients.)
+  [Envelopes/contract/Envelopes/RecipientDelegated] Emails and Webhooks learn about delegation through a RecipientDelegated event, as they do for rejection. (because: Envelopes should not know which emails exist. In code this is still a direct job trigger, the same as rejection today.)
+
+open questions:
+  [Envelopes/contract/Signing/Delegate] If the original signer had access auth (account login or 2FA), what does the delegate get? options: Same auth as the original | No auth, sender can add it | Block delegation for those signers
+  [Envelopes/aggregate/Envelope] Can a delegate delegate again? options: No, one hop only | Yes, any number of times
+  [Envelopes/entity/DocumentMeta] Should delegation default to on for teams that already allow dictating the next signer? options: Off for everyone | Follow allowDictateNextSigner
+</script>
+<script type="application/json" id="plan-view">{"current":{"modules":[{"id":"Envelopes","name":"Envelopes","purpose":"A document or template being prepared, sent and signed: its recipients, their fields and signatures, and the rules for who acts when.","depth":"mapped","note":"In code, document functions enqueue email jobs by name (jobs.triggerJob('send.signing.requested.email'), 22 files) and call triggerWebhook directly (17 files). The plan models both as events.","sources":["packages/prisma/schema.prisma (Envelope)","packages/lib/server-only/envelope/","packages/lib/server-only/document/","packages/lib/server-only/recipient/","packages/lib/server-only/field/"],"usedBy":["Emails","Webhooks","Templates","Api"],"contracts":[{"id":"Envelopes/contract/Envelopes","name":"Envelopes","sources":["packages/trpc/server/envelope-router/router.ts","packages/lib/server-only/document/send-document.ts (sendDocument)"],"types":[{"id":"Envelopes/contract/Envelopes/type/EnvelopeStatus","name":"EnvelopeStatus","kind":"enum","values":["DRAFT","PENDING","COMPLETED","REJECTED","CANCELLED"]},{"id":"Envelopes/contract/Envelopes/type/RecipientRole","name":"RecipientRole","kind":"enum","values":["SIGNER","APPROVER","VIEWER","ASSISTANT","CC"]},{"id":"Envelopes/contract/Envelopes/type/SigningStatus","name":"SigningStatus","kind":"enum","values":["NOT_SIGNED","SIGNED","REJECTED"]},{"id":"Envelopes/contract/Envelopes/type/SigningOrderMode","name":"SigningOrderMode","kind":"enum","values":["PARALLEL","SEQUENTIAL"]},{"id":"Envelopes/contract/Envelopes/type/RecipientInput","name":"RecipientInput","kind":"record","fields":[{"name":"email","type":[{"s":"string"}]},{"name":"name","type":[{"s":"string"}]},{"name":"role","type":[{"s":"RecipientRole","ref":"Envelopes/contract/Envelopes/type/RecipientRole"}]},{"name":"signingOrder","type":[{"s":"int"},{"s":"?"}]}]},{"id":"Envelopes/contract/Envelopes/type/RecipientView","name":"RecipientView","kind":"record","fields":[{"name":"id","type":[{"s":"int"}]},{"name":"email","type":[{"s":"string"}]},{"name":"name","type":[{"s":"string"}]},{"name":"role","type":[{"s":"RecipientRole","ref":"Envelopes/contract/Envelopes/type/RecipientRole"}]},{"name":"signingStatus","type":[{"s":"SigningStatus","ref":"Envelopes/contract/Envelopes/type/SigningStatus"}]}]},{"id":"Envelopes/contract/Envelopes/type/EnvelopeSettings","name":"EnvelopeSettings","kind":"record","fields":[{"name":"signingOrder","type":[{"s":"SigningOrderMode","ref":"Envelopes/contract/Envelopes/type/SigningOrderMode"}]},{"name":"allowDictateNextSigner","type":[{"s":"boolean"}]}]},{"id":"Envelopes/contract/Envelopes/type/EnvelopeView","name":"EnvelopeView","kind":"record","fields":[{"name":"id","type":[{"s":"string"}]},{"name":"title","type":[{"s":"string"}]},{"name":"status","type":[{"s":"EnvelopeStatus","ref":"Envelopes/contract/Envelopes/type/EnvelopeStatus"}]},{"name":"recipients","type":[{"s":"RecipientView","ref":"Envelopes/contract/Envelopes/type/RecipientView"},{"s":"[]"}]}]}],"operations":[{"id":"Envelopes/contract/Envelopes/GetEnvelope","name":"GetEnvelope","mode":"query","input":[{"name":"envelopeId","type":[{"s":"string"}]}],"output":[{"s":"EnvelopeView","ref":"Envelopes/contract/Envelopes/type/EnvelopeView"}],"errors":["NotFound"]},{"id":"Envelopes/contract/Envelopes/SetRecipients","name":"SetRecipients","mode":"command","input":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"recipients","type":[{"s":"RecipientInput","ref":"Envelopes/contract/Envelopes/type/RecipientInput"},{"s":"[]"}]}],"output":[{"s":"RecipientView","ref":"Envelopes/contract/Envelopes/type/RecipientView"},{"s":"[]"}],"errors":["NotFound","NotEditable"]},{"id":"Envelopes/contract/Envelopes/UpdateSettings","name":"UpdateSettings","mode":"command","input":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"settings","type":[{"s":"EnvelopeSettings","ref":"Envelopes/contract/Envelopes/type/EnvelopeSettings"}]}],"output":null,"errors":["NotFound","NotEditable"]},{"id":"Envelopes/contract/Envelopes/Send","name":"Send","mode":"command","input":[{"name":"envelopeId","type":[{"s":"string"}]}],"output":[{"s":"EnvelopeView","ref":"Envelopes/contract/Envelopes/type/EnvelopeView"}],"errors":["NotFound","AlreadySent","MissingFields"]},{"id":"Envelopes/contract/Envelopes/Cancel","name":"Cancel","mode":"command","input":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"reason","type":[{"s":"string"}]}],"output":null,"errors":["NotFound","NotPending"]},{"id":"Envelopes/contract/Envelopes/ListAuditLog","name":"ListAuditLog","mode":"query","input":[{"name":"envelopeId","type":[{"s":"string"}]}],"output":[{"s":"AuditTrail.AuditEntry","ref":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditEntry"},{"s":"[]"}],"errors":["NotFound"]}],"events":[{"id":"Envelopes/contract/Envelopes/SigningRequested","name":"SigningRequested","payload":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"recipientId","type":[{"s":"int"}]}]},{"id":"Envelopes/contract/Envelopes/RecipientCompleted","name":"RecipientCompleted","payload":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"recipientId","type":[{"s":"int"}]}]},{"id":"Envelopes/contract/Envelopes/RecipientRejected","name":"RecipientRejected","payload":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"recipientId","type":[{"s":"int"}]},{"name":"reason","type":[{"s":"string"}]}]},{"id":"Envelopes/contract/Envelopes/EnvelopeCompleted","name":"EnvelopeCompleted","payload":[{"name":"envelopeId","type":[{"s":"string"}]}]},{"id":"Envelopes/contract/Envelopes/EnvelopeRejected","name":"EnvelopeRejected","payload":[{"name":"envelopeId","type":[{"s":"string"}]}]}]},{"id":"Envelopes/contract/Signing","name":"Signing","note":"Every operation here is authorised by the recipient's token, not a session.","sources":["packages/trpc/server/recipient-router/router.ts (completeDocumentWithToken)","packages/lib/server-only/document/reject-document-with-token.ts"],"types":[{"id":"Envelopes/contract/Signing/type/SigningSession","name":"SigningSession","kind":"record","fields":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"recipientId","type":[{"s":"int"}]},{"name":"role","type":[{"s":"Envelopes.RecipientRole","ref":"Envelopes/contract/Envelopes/type/RecipientRole"}]},{"name":"isTurn","type":[{"s":"boolean"}]}]}],"operations":[{"id":"Envelopes/contract/Signing/GetSession","name":"GetSession","mode":"query","input":[{"name":"token","type":[{"s":"string"}]}],"output":[{"s":"SigningSession","ref":"Envelopes/contract/Signing/type/SigningSession"}],"errors":["NotFound","Expired"]},{"id":"Envelopes/contract/Signing/SignField","name":"SignField","mode":"command","input":[{"name":"token","type":[{"s":"string"}]},{"name":"fieldId","type":[{"s":"int"}]},{"name":"value","type":[{"s":"string"}]}],"output":null,"errors":["NotFound","Expired","NotYourTurn","AlreadyInserted"]},{"id":"Envelopes/contract/Signing/Complete","name":"Complete","mode":"command","input":[{"name":"token","type":[{"s":"string"}]},{"name":"nextSignerEmail","type":[{"s":"string"},{"s":"?"}]}],"output":null,"errors":["NotFound","Expired","NotYourTurn","MissingFields","AlreadyActioned"]},{"id":"Envelopes/contract/Signing/Reject","name":"Reject","mode":"command","input":[{"name":"token","type":[{"s":"string"}]},{"name":"reason","type":[{"s":"string"}]}],"output":null,"errors":["NotFound","Expired","NotPending","AlreadyActioned"]}],"events":[]}],"aggregates":[{"id":"Envelopes/aggregate/Envelope","name":"Envelope","root":"Envelopes/entity/Envelope","members":["Envelopes/entity/DocumentMeta","Envelopes/entity/Recipient","Envelopes/entity/Field","Envelopes/entity/Signature"],"invariants":["Recipients can only act while the envelope is PENDING.","A recipient's signingStatus moves from NOT_SIGNED to SIGNED or REJECTED, never back.","Every field belongs to a recipient of the same envelope, and a signature only fills that recipient's field.","With SEQUENTIAL signing order, only recipients whose turn it is can act (SigningOrder decides)."]}],"entities":[{"id":"Envelopes/entity/Envelope","name":"Envelope","sources":["packages/prisma/schema.prisma:449 (Envelope)"],"fields":[{"name":"id","type":[{"s":"string"}],"key":true},{"name":"teamId","type":[{"s":"int"}],"key":false},{"name":"userId","type":[{"s":"int"}],"key":false},{"name":"status","type":[{"s":"EnvelopeStatus","ref":"Envelopes/contract/Envelopes/type/EnvelopeStatus"}],"key":false},{"name":"title","type":[{"s":"string"}],"key":false},{"name":"documentMetaId","type":[{"s":"string"}],"key":false}],"indexes":["teamId","status"],"access":["get by key","find by teamId","find by Recipient.token","save"]},{"id":"Envelopes/entity/DocumentMeta","name":"DocumentMeta","note":"Per-envelope settings. Team and organisation settings hold the defaults.","sources":["packages/prisma/schema.prisma:575 (DocumentMeta)"],"fields":[{"name":"id","type":[{"s":"string"}],"key":true},{"name":"signingOrder","type":[{"s":"SigningOrderMode","ref":"Envelopes/contract/Envelopes/type/SigningOrderMode"}],"key":false},{"name":"allowDictateNextSigner","type":[{"s":"boolean"}],"key":false},{"name":"distributionMethod","type":[{"s":"string"}],"key":false}],"indexes":[],"access":[]},{"id":"Envelopes/entity/Recipient","name":"Recipient","note":"Recipient rows are written from 29 files in 10 folders, including the document flows, templates, jobs and admin (grep for prisma/tx.recipient writes). The plan treats Envelopes as their one owner.","sources":["packages/prisma/schema.prisma:646 (Recipient)"],"fields":[{"name":"id","type":[{"s":"int"}],"key":true},{"name":"envelopeId","type":[{"s":"string"}],"key":false},{"name":"email","type":[{"s":"string"}],"key":false},{"name":"name","type":[{"s":"string"}],"key":false},{"name":"token","type":[{"s":"string"}],"key":false},{"name":"role","type":[{"s":"RecipientRole","ref":"Envelopes/contract/Envelopes/type/RecipientRole"}],"key":false},{"name":"signingStatus","type":[{"s":"SigningStatus","ref":"Envelopes/contract/Envelopes/type/SigningStatus"}],"key":false},{"name":"signingOrder","type":[{"s":"int"},{"s":"?"}],"key":false},{"name":"expiresAt","type":[{"s":"datetime"},{"s":"?"}],"key":false}],"indexes":["token","envelopeId","email"],"access":[]},{"id":"Envelopes/entity/Field","name":"Field","sources":["packages/prisma/schema.prisma:703 (Field)"],"fields":[{"name":"id","type":[{"s":"int"}],"key":true},{"name":"envelopeId","type":[{"s":"string"}],"key":false},{"name":"recipientId","type":[{"s":"int"}],"key":false},{"name":"type","type":[{"s":"string"}],"key":false},{"name":"inserted","type":[{"s":"boolean"}],"key":false}],"indexes":["envelopeId","recipientId"],"access":[]},{"id":"Envelopes/entity/Signature","name":"Signature","sources":["packages/prisma/schema.prisma:728 (Signature)"],"fields":[{"name":"id","type":[{"s":"int"}],"key":true},{"name":"fieldId","type":[{"s":"int"}],"key":false},{"name":"recipientId","type":[{"s":"int"}],"key":false},{"name":"created","type":[{"s":"datetime"}],"key":false}],"indexes":["fieldId (unique)","recipientId"],"access":[]}],"modules":[{"id":"Envelopes/SigningOrder","name":"SigningOrder","purpose":"Decides whose turn it is. Pure rules over the recipients of one envelope; owns no data.","depth":"mapped","sources":["packages/lib/server-only/recipient/get-is-recipient-turn.ts","packages/lib/server-only/recipient/get-next-pending-recipient.ts","packages/lib/utils/recipients.ts"],"usedBy":["Envelopes"],"contracts":[{"id":"Envelopes/SigningOrder/contract/SigningOrder","name":"SigningOrder","sources":[],"types":[],"operations":[{"id":"Envelopes/SigningOrder/contract/SigningOrder/IsRecipientTurn","name":"IsRecipientTurn","mode":"query","input":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"recipientId","type":[{"s":"int"}]}],"output":[{"s":"boolean"}],"errors":[]},{"id":"Envelopes/SigningOrder/contract/SigningOrder/NextPendingRecipients","name":"NextPendingRecipients","mode":"query","input":[{"name":"envelopeId","type":[{"s":"string"}]}],"output":[{"s":"int"},{"s":"[]"}],"errors":[]}],"events":[]}],"aggregates":[],"entities":[],"modules":[]},{"id":"Envelopes/AuditTrail","name":"AuditTrail","purpose":"Append-only record of everything that happened to an envelope. Feeds the signing certificate.","depth":"mapped","note":"In code every flow inserts DocumentAuditLog rows itself, inside the same Prisma transaction as the change it records.","sources":["packages/lib/types/document-audit-logs.ts","packages/lib/utils/document-audit-logs.ts (createDocumentAuditLogData)"],"usedBy":["Envelopes"],"contracts":[{"id":"Envelopes/AuditTrail/contract/AuditTrail","name":"AuditTrail","sources":[],"types":[{"id":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditType","name":"AuditType","kind":"enum","values":["DOCUMENT_SENT","DOCUMENT_OPENED","DOCUMENT_RECIPIENT_COMPLETED","DOCUMENT_RECIPIENT_REJECTED","RECIPIENT_UPDATED","DOCUMENT_COMPLETED"]},{"id":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditEntry","name":"AuditEntry","kind":"record","fields":[{"name":"type","type":[{"s":"AuditType","ref":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditType"}]},{"name":"actorEmail","type":[{"s":"string"}]},{"name":"data","type":[{"s":"string"}]}]}],"operations":[{"id":"Envelopes/AuditTrail/contract/AuditTrail/Append","name":"Append","mode":"command","input":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"entry","type":[{"s":"AuditEntry","ref":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditEntry"}]}],"output":null,"errors":[]},{"id":"Envelopes/AuditTrail/contract/AuditTrail/List","name":"List","mode":"query","input":[{"name":"envelopeId","type":[{"s":"string"}]}],"output":[{"s":"AuditEntry","ref":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditEntry"},{"s":"[]"}],"errors":[]}],"events":[]}],"aggregates":[],"entities":[{"id":"Envelopes/AuditTrail/entity/DocumentAuditLog","name":"DocumentAuditLog","note":"type is a free-text column; the list of types lives in code, so adding one needs no migration.","sources":[],"fields":[{"name":"id","type":[{"s":"string"}],"key":true},{"name":"envelopeId","type":[{"s":"string"},{"s":"?"}],"key":false},{"name":"type","type":[{"s":"string"}],"key":false},{"name":"data","type":[{"s":"string"}],"key":false},{"name":"email","type":[{"s":"string"},{"s":"?"}],"key":false},{"name":"createdAt","type":[{"s":"datetime"}],"key":false}],"indexes":["envelopeId"],"access":["save","find by envelopeId"]}],"modules":[]},{"id":"Envelopes/Sealing","name":"Sealing","purpose":"Burns signatures into the PDF and signs it once every recipient has acted.","depth":"stub","sources":["packages/lib/jobs/definitions/internal/seal-document.handler.ts"],"usedBy":["Envelopes"],"contracts":[{"id":"Envelopes/Sealing/contract/Sealing","name":"Sealing","sources":[],"types":[],"operations":[],"events":[]}],"aggregates":[],"entities":[],"modules":[]}]},{"id":"Emails","name":"Emails","purpose":"Sends every email about an envelope: signing requests, confirmations, notices to the sender.","depth":"mapped","note":"Each email is a background job whose handler reads the envelope through Prisma itself. Conceptually it reads through GetEnvelope.","sources":["packages/lib/jobs/definitions/emails/","packages/email/templates/"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"modules":[]},{"id":"Webhooks","name":"Webhooks","purpose":"Lets a team register URLs for envelope events, and delivers and logs each call.","depth":"mapped","sources":["packages/lib/server-only/webhooks/","packages/lib/server-only/webhooks/trigger/trigger-webhook.ts (triggerWebhook)"],"usedBy":["Api"],"contracts":[{"id":"Webhooks/contract/Webhooks","name":"Webhooks","sources":[],"types":[{"id":"Webhooks/contract/Webhooks/type/WebhookEvent","name":"WebhookEvent","kind":"enum","values":["DOCUMENT_SENT","DOCUMENT_OPENED","DOCUMENT_SIGNED","DOCUMENT_RECIPIENT_COMPLETED","DOCUMENT_COMPLETED","DOCUMENT_REJECTED","DOCUMENT_CANCELLED","RECIPIENT_EXPIRED"]},{"id":"Webhooks/contract/Webhooks/type/WebhookView","name":"WebhookView","kind":"record","fields":[{"name":"id","type":[{"s":"string"}]},{"name":"webhookUrl","type":[{"s":"string"}]},{"name":"eventTriggers","type":[{"s":"WebhookEvent","ref":"Webhooks/contract/Webhooks/type/WebhookEvent"},{"s":"[]"}]},{"name":"enabled","type":[{"s":"boolean"}]}]}],"operations":[{"id":"Webhooks/contract/Webhooks/CreateWebhook","name":"CreateWebhook","mode":"command","input":[{"name":"teamId","type":[{"s":"int"}]},{"name":"webhookUrl","type":[{"s":"string"}]},{"name":"eventTriggers","type":[{"s":"WebhookEvent","ref":"Webhooks/contract/Webhooks/type/WebhookEvent"},{"s":"[]"}]}],"output":[{"s":"WebhookView","ref":"Webhooks/contract/Webhooks/type/WebhookView"}],"errors":["InvalidUrl"]},{"id":"Webhooks/contract/Webhooks/ListForTeam","name":"ListForTeam","mode":"query","input":[{"name":"teamId","type":[{"s":"int"}]}],"output":[{"s":"WebhookView","ref":"Webhooks/contract/Webhooks/type/WebhookView"},{"s":"[]"}],"errors":[]}],"events":[]}],"aggregates":[],"entities":[{"id":"Webhooks/entity/Webhook","name":"Webhook","note":"Looked up by team and event on every trigger (get-all-webhooks-by-event-trigger.ts) with no index on teamId.","sources":["packages/prisma/schema.prisma:184 (Webhook)"],"fields":[{"name":"id","type":[{"s":"string"}],"key":true},{"name":"teamId","type":[{"s":"int"}],"key":false},{"name":"webhookUrl","type":[{"s":"string"}],"key":false},{"name":"eventTriggers","type":[{"s":"WebhookEvent","ref":"Webhooks/contract/Webhooks/type/WebhookEvent"},{"s":"[]"}],"key":false},{"name":"enabled","type":[{"s":"boolean"}],"key":false}],"indexes":[],"access":["get by key","find by teamId","save"]},{"id":"Webhooks/entity/WebhookCall","name":"WebhookCall","sources":["packages/prisma/schema.prisma:204 (WebhookCall)"],"fields":[{"name":"id","type":[{"s":"string"}],"key":true},{"name":"webhookId","type":[{"s":"string"}],"key":false},{"name":"event","type":[{"s":"WebhookEvent","ref":"Webhooks/contract/Webhooks/type/WebhookEvent"}],"key":false},{"name":"status","type":[{"s":"string"}],"key":false},{"name":"responseCode","type":[{"s":"int"}],"key":false},{"name":"createdAt","type":[{"s":"datetime"}],"key":false}],"indexes":[],"access":["find by webhookId","save"]}],"modules":[]},{"id":"Accounts","name":"Accounts","purpose":"Users, teams and organisations, their members and the default settings a team gives new envelopes.","depth":"stub","sources":["packages/lib/server-only/team/","packages/lib/server-only/organisation/","packages/lib/server-only/user/"],"usedBy":["Envelopes","Api"],"contracts":[{"id":"Accounts/contract/Accounts","name":"Accounts","sources":[],"types":[],"operations":[],"events":[]}],"aggregates":[],"entities":[],"modules":[]},{"id":"Templates","name":"Templates","purpose":"Reusable envelopes, direct links and bulk send. Creates envelopes from a template.","depth":"stub","sources":["packages/lib/server-only/template/"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"modules":[]},{"id":"Api","name":"Api","purpose":"The tRPC routes (API v2 and the app) and the ts-rest API v1. Thin: validates input and calls the contracts.","depth":"stub","sources":["packages/trpc/server/","packages/api/v1/"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"modules":[]}],"edges":[{"from":"Envelopes","to":"Envelopes/SigningOrder/contract/SigningOrder","kind":"call"},{"from":"Envelopes","to":"Envelopes/AuditTrail/contract/AuditTrail","kind":"call"},{"from":"Envelopes","to":"Envelopes/Sealing/contract/Sealing","kind":"call"},{"from":"Envelopes","to":"Accounts/contract/Accounts","kind":"call"},{"from":"Emails","to":"Envelopes/contract/Envelopes","kind":"call"},{"from":"Envelopes/contract/Envelopes","to":"Emails","kind":"event","label":"SigningRequested, RecipientCompleted, RecipientRejected, EnvelopeCompleted"},{"from":"Webhooks","to":"Envelopes/contract/Envelopes","kind":"call"},{"from":"Envelopes/contract/Envelopes","to":"Webhooks","kind":"event","label":"SigningRequested, RecipientCompleted, RecipientRejected, EnvelopeCompleted, EnvelopeRejected"},{"from":"Templates","to":"Envelopes/contract/Envelopes","kind":"call"},{"from":"Api","to":"Envelopes/contract/Envelopes","kind":"call"},{"from":"Api","to":"Envelopes/contract/Signing","kind":"call"},{"from":"Api","to":"Webhooks/contract/Webhooks","kind":"call"},{"from":"Api","to":"Accounts/contract/Accounts","kind":"call"}],"diagnostics":[{"level":"warning","at":"Webhooks / WebhookRepository","message":"findBy teamId has no supporting index on Webhook"},{"level":"warning","at":"Webhooks / WebhookCallRepository","message":"findBy webhookId has no supporting index on WebhookCall"}]},"proposed":{"modules":[{"id":"Envelopes","name":"Envelopes","purpose":"A document or template being prepared, sent and signed: its recipients, their fields and signatures, and the rules for who acts when.","depth":"mapped","note":"In code, document functions enqueue email jobs by name (jobs.triggerJob('send.signing.requested.email'), 22 files) and call triggerWebhook directly (17 files). The plan models both as events.","sources":["packages/prisma/schema.prisma (Envelope)","packages/lib/server-only/envelope/","packages/lib/server-only/document/","packages/lib/server-only/recipient/","packages/lib/server-only/field/"],"usedBy":["Emails","Webhooks","Templates","Api"],"contracts":[{"id":"Envelopes/contract/Envelopes","name":"Envelopes","sources":["packages/trpc/server/envelope-router/router.ts","packages/lib/server-only/document/send-document.ts (sendDocument)"],"types":[{"id":"Envelopes/contract/Envelopes/type/EnvelopeStatus","name":"EnvelopeStatus","kind":"enum","values":["DRAFT","PENDING","COMPLETED","REJECTED","CANCELLED"]},{"id":"Envelopes/contract/Envelopes/type/RecipientRole","name":"RecipientRole","kind":"enum","values":["SIGNER","APPROVER","VIEWER","ASSISTANT","CC"]},{"id":"Envelopes/contract/Envelopes/type/SigningStatus","name":"SigningStatus","kind":"enum","values":["NOT_SIGNED","SIGNED","REJECTED","DELEGATED"]},{"id":"Envelopes/contract/Envelopes/type/SigningOrderMode","name":"SigningOrderMode","kind":"enum","values":["PARALLEL","SEQUENTIAL"]},{"id":"Envelopes/contract/Envelopes/type/RecipientInput","name":"RecipientInput","kind":"record","fields":[{"name":"email","type":[{"s":"string"}]},{"name":"name","type":[{"s":"string"}]},{"name":"role","type":[{"s":"RecipientRole","ref":"Envelopes/contract/Envelopes/type/RecipientRole"}]},{"name":"signingOrder","type":[{"s":"int"},{"s":"?"}]}]},{"id":"Envelopes/contract/Envelopes/type/RecipientView","name":"RecipientView","kind":"record","fields":[{"name":"id","type":[{"s":"int"}]},{"name":"email","type":[{"s":"string"}]},{"name":"name","type":[{"s":"string"}]},{"name":"role","type":[{"s":"RecipientRole","ref":"Envelopes/contract/Envelopes/type/RecipientRole"}]},{"name":"signingStatus","type":[{"s":"SigningStatus","ref":"Envelopes/contract/Envelopes/type/SigningStatus"}]},{"name":"delegatedFromId","type":[{"s":"int"},{"s":"?"}]}]},{"id":"Envelopes/contract/Envelopes/type/EnvelopeSettings","name":"EnvelopeSettings","kind":"record","fields":[{"name":"signingOrder","type":[{"s":"SigningOrderMode","ref":"Envelopes/contract/Envelopes/type/SigningOrderMode"}]},{"name":"allowDictateNextSigner","type":[{"s":"boolean"}]},{"name":"allowDelegation","type":[{"s":"boolean"},{"s":"?"}]}]},{"id":"Envelopes/contract/Envelopes/type/EnvelopeView","name":"EnvelopeView","kind":"record","fields":[{"name":"id","type":[{"s":"string"}]},{"name":"title","type":[{"s":"string"}]},{"name":"status","type":[{"s":"EnvelopeStatus","ref":"Envelopes/contract/Envelopes/type/EnvelopeStatus"}]},{"name":"recipients","type":[{"s":"RecipientView","ref":"Envelopes/contract/Envelopes/type/RecipientView"},{"s":"[]"}]}]}],"operations":[{"id":"Envelopes/contract/Envelopes/GetEnvelope","name":"GetEnvelope","mode":"query","input":[{"name":"envelopeId","type":[{"s":"string"}]}],"output":[{"s":"EnvelopeView","ref":"Envelopes/contract/Envelopes/type/EnvelopeView"}],"errors":["NotFound"]},{"id":"Envelopes/contract/Envelopes/SetRecipients","name":"SetRecipients","mode":"command","input":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"recipients","type":[{"s":"RecipientInput","ref":"Envelopes/contract/Envelopes/type/RecipientInput"},{"s":"[]"}]}],"output":[{"s":"RecipientView","ref":"Envelopes/contract/Envelopes/type/RecipientView"},{"s":"[]"}],"errors":["NotFound","NotEditable"]},{"id":"Envelopes/contract/Envelopes/UpdateSettings","name":"UpdateSettings","mode":"command","input":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"settings","type":[{"s":"EnvelopeSettings","ref":"Envelopes/contract/Envelopes/type/EnvelopeSettings"}]}],"output":null,"errors":["NotFound","NotEditable"]},{"id":"Envelopes/contract/Envelopes/Send","name":"Send","mode":"command","input":[{"name":"envelopeId","type":[{"s":"string"}]}],"output":[{"s":"EnvelopeView","ref":"Envelopes/contract/Envelopes/type/EnvelopeView"}],"errors":["NotFound","AlreadySent","MissingFields"]},{"id":"Envelopes/contract/Envelopes/Cancel","name":"Cancel","mode":"command","input":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"reason","type":[{"s":"string"}]}],"output":null,"errors":["NotFound","NotPending"]},{"id":"Envelopes/contract/Envelopes/ListAuditLog","name":"ListAuditLog","mode":"query","input":[{"name":"envelopeId","type":[{"s":"string"}]}],"output":[{"s":"AuditTrail.AuditEntry","ref":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditEntry"},{"s":"[]"}],"errors":["NotFound"]}],"events":[{"id":"Envelopes/contract/Envelopes/SigningRequested","name":"SigningRequested","payload":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"recipientId","type":[{"s":"int"}]}]},{"id":"Envelopes/contract/Envelopes/RecipientCompleted","name":"RecipientCompleted","payload":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"recipientId","type":[{"s":"int"}]}]},{"id":"Envelopes/contract/Envelopes/RecipientRejected","name":"RecipientRejected","payload":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"recipientId","type":[{"s":"int"}]},{"name":"reason","type":[{"s":"string"}]}]},{"id":"Envelopes/contract/Envelopes/EnvelopeCompleted","name":"EnvelopeCompleted","payload":[{"name":"envelopeId","type":[{"s":"string"}]}]},{"id":"Envelopes/contract/Envelopes/EnvelopeRejected","name":"EnvelopeRejected","payload":[{"name":"envelopeId","type":[{"s":"string"}]}]},{"id":"Envelopes/contract/Envelopes/RecipientDelegated","name":"RecipientDelegated","payload":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"fromRecipientId","type":[{"s":"int"}]},{"name":"toRecipientId","type":[{"s":"int"}]},{"name":"reason","type":[{"s":"string"},{"s":"?"}]}]}]},{"id":"Envelopes/contract/Signing","name":"Signing","note":"Every operation here is authorised by the recipient's token, not a session.","sources":["packages/trpc/server/recipient-router/router.ts (completeDocumentWithToken)","packages/lib/server-only/document/reject-document-with-token.ts"],"types":[{"id":"Envelopes/contract/Signing/type/SigningSession","name":"SigningSession","kind":"record","fields":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"recipientId","type":[{"s":"int"}]},{"name":"role","type":[{"s":"Envelopes.RecipientRole","ref":"Envelopes/contract/Envelopes/type/RecipientRole"}]},{"name":"isTurn","type":[{"s":"boolean"}]}]},{"id":"Envelopes/contract/Signing/type/DelegateTo","name":"DelegateTo","kind":"record","fields":[{"name":"email","type":[{"s":"string"}]},{"name":"name","type":[{"s":"string"}]},{"name":"reason","type":[{"s":"string"},{"s":"?"}]}]}],"operations":[{"id":"Envelopes/contract/Signing/GetSession","name":"GetSession","mode":"query","input":[{"name":"token","type":[{"s":"string"}]}],"output":[{"s":"SigningSession","ref":"Envelopes/contract/Signing/type/SigningSession"}],"errors":["NotFound","Expired"]},{"id":"Envelopes/contract/Signing/SignField","name":"SignField","mode":"command","input":[{"name":"token","type":[{"s":"string"}]},{"name":"fieldId","type":[{"s":"int"}]},{"name":"value","type":[{"s":"string"}]}],"output":null,"errors":["NotFound","Expired","NotYourTurn","AlreadyInserted"]},{"id":"Envelopes/contract/Signing/Complete","name":"Complete","mode":"command","input":[{"name":"token","type":[{"s":"string"}]},{"name":"nextSignerEmail","type":[{"s":"string"},{"s":"?"}]}],"output":null,"errors":["NotFound","Expired","NotYourTurn","MissingFields","AlreadyActioned"]},{"id":"Envelopes/contract/Signing/Reject","name":"Reject","mode":"command","input":[{"name":"token","type":[{"s":"string"}]},{"name":"reason","type":[{"s":"string"}]}],"output":null,"errors":["NotFound","Expired","NotPending","AlreadyActioned"]},{"id":"Envelopes/contract/Signing/Delegate","name":"Delegate","mode":"command","input":[{"name":"token","type":[{"s":"string"}]},{"name":"to","type":[{"s":"DelegateTo","ref":"Envelopes/contract/Signing/type/DelegateTo"}]}],"output":[{"s":"int"}],"errors":["NotFound","Expired","NotPending","AlreadyActioned","NotYourTurn","DelegationNotAllowed","AlreadyARecipient"]}],"events":[]}],"aggregates":[{"id":"Envelopes/aggregate/Envelope","name":"Envelope","root":"Envelopes/entity/Envelope","members":["Envelopes/entity/DocumentMeta","Envelopes/entity/Recipient","Envelopes/entity/Field","Envelopes/entity/Signature"],"invariants":["Recipients can only act while the envelope is PENDING.","A recipient's signingStatus moves from NOT_SIGNED to SIGNED, REJECTED or DELEGATED, never back.","Every field belongs to a recipient of the same envelope, and a signature only fills that recipient's field.","With SEQUENTIAL signing order, only recipients whose turn it is can act (SigningOrder decides).","Delegating creates a new recipient in the same signing position, moves the original's unfilled fields to it, and the original's token stops working.","Only a SIGNER or APPROVER who has not acted can delegate, and only when the envelope allows it."]}],"entities":[{"id":"Envelopes/entity/Envelope","name":"Envelope","sources":["packages/prisma/schema.prisma:449 (Envelope)"],"fields":[{"name":"id","type":[{"s":"string"}],"key":true},{"name":"teamId","type":[{"s":"int"}],"key":false},{"name":"userId","type":[{"s":"int"}],"key":false},{"name":"status","type":[{"s":"EnvelopeStatus","ref":"Envelopes/contract/Envelopes/type/EnvelopeStatus"}],"key":false},{"name":"title","type":[{"s":"string"}],"key":false},{"name":"documentMetaId","type":[{"s":"string"}],"key":false}],"indexes":["teamId","status"],"access":["get by key","find by teamId","find by Recipient.token","save"]},{"id":"Envelopes/entity/DocumentMeta","name":"DocumentMeta","note":"Per-envelope settings. Team and organisation settings hold the defaults.","sources":["packages/prisma/schema.prisma:575 (DocumentMeta)"],"fields":[{"name":"id","type":[{"s":"string"}],"key":true},{"name":"signingOrder","type":[{"s":"SigningOrderMode","ref":"Envelopes/contract/Envelopes/type/SigningOrderMode"}],"key":false},{"name":"allowDictateNextSigner","type":[{"s":"boolean"}],"key":false},{"name":"distributionMethod","type":[{"s":"string"}],"key":false},{"name":"allowDelegation","type":[{"s":"boolean"},{"s":"?"}],"key":false}],"indexes":[],"access":[]},{"id":"Envelopes/entity/Recipient","name":"Recipient","note":"Recipient rows are written from 29 files in 10 folders, including the document flows, templates, jobs and admin (grep for prisma/tx.recipient writes). The plan treats Envelopes as their one owner.","sources":["packages/prisma/schema.prisma:646 (Recipient)"],"fields":[{"name":"id","type":[{"s":"int"}],"key":true},{"name":"envelopeId","type":[{"s":"string"}],"key":false},{"name":"email","type":[{"s":"string"}],"key":false},{"name":"name","type":[{"s":"string"}],"key":false},{"name":"token","type":[{"s":"string"}],"key":false},{"name":"role","type":[{"s":"RecipientRole","ref":"Envelopes/contract/Envelopes/type/RecipientRole"}],"key":false},{"name":"signingStatus","type":[{"s":"SigningStatus","ref":"Envelopes/contract/Envelopes/type/SigningStatus"}],"key":false},{"name":"signingOrder","type":[{"s":"int"},{"s":"?"}],"key":false},{"name":"expiresAt","type":[{"s":"datetime"},{"s":"?"}],"key":false},{"name":"delegatedFromId","type":[{"s":"int"},{"s":"?"}],"key":false}],"indexes":["token","envelopeId","email"],"access":[]},{"id":"Envelopes/entity/Field","name":"Field","sources":["packages/prisma/schema.prisma:703 (Field)"],"fields":[{"name":"id","type":[{"s":"int"}],"key":true},{"name":"envelopeId","type":[{"s":"string"}],"key":false},{"name":"recipientId","type":[{"s":"int"}],"key":false},{"name":"type","type":[{"s":"string"}],"key":false},{"name":"inserted","type":[{"s":"boolean"}],"key":false}],"indexes":["envelopeId","recipientId"],"access":[]},{"id":"Envelopes/entity/Signature","name":"Signature","sources":["packages/prisma/schema.prisma:728 (Signature)"],"fields":[{"name":"id","type":[{"s":"int"}],"key":true},{"name":"fieldId","type":[{"s":"int"}],"key":false},{"name":"recipientId","type":[{"s":"int"}],"key":false},{"name":"created","type":[{"s":"datetime"}],"key":false}],"indexes":["fieldId (unique)","recipientId"],"access":[]}],"modules":[{"id":"Envelopes/SigningOrder","name":"SigningOrder","purpose":"Decides whose turn it is. Pure rules over the recipients of one envelope; owns no data.","depth":"mapped","sources":["packages/lib/server-only/recipient/get-is-recipient-turn.ts","packages/lib/server-only/recipient/get-next-pending-recipient.ts","packages/lib/utils/recipients.ts"],"usedBy":["Envelopes"],"contracts":[{"id":"Envelopes/SigningOrder/contract/SigningOrder","name":"SigningOrder","sources":[],"types":[],"operations":[{"id":"Envelopes/SigningOrder/contract/SigningOrder/IsRecipientTurn","name":"IsRecipientTurn","mode":"query","input":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"recipientId","type":[{"s":"int"}]}],"output":[{"s":"boolean"}],"errors":[]},{"id":"Envelopes/SigningOrder/contract/SigningOrder/NextPendingRecipients","name":"NextPendingRecipients","mode":"query","input":[{"name":"envelopeId","type":[{"s":"string"}]}],"output":[{"s":"int"},{"s":"[]"}],"errors":[]}],"events":[]}],"aggregates":[],"entities":[],"modules":[]},{"id":"Envelopes/AuditTrail","name":"AuditTrail","purpose":"Append-only record of everything that happened to an envelope. Feeds the signing certificate.","depth":"mapped","note":"In code every flow inserts DocumentAuditLog rows itself, inside the same Prisma transaction as the change it records.","sources":["packages/lib/types/document-audit-logs.ts","packages/lib/utils/document-audit-logs.ts (createDocumentAuditLogData)"],"usedBy":["Envelopes"],"contracts":[{"id":"Envelopes/AuditTrail/contract/AuditTrail","name":"AuditTrail","sources":[],"types":[{"id":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditType","name":"AuditType","kind":"enum","values":["DOCUMENT_SENT","DOCUMENT_OPENED","DOCUMENT_RECIPIENT_COMPLETED","DOCUMENT_RECIPIENT_REJECTED","DOCUMENT_RECIPIENT_DELEGATED","RECIPIENT_UPDATED","DOCUMENT_COMPLETED"]},{"id":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditEntry","name":"AuditEntry","kind":"record","fields":[{"name":"type","type":[{"s":"AuditType","ref":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditType"}]},{"name":"actorEmail","type":[{"s":"string"}]},{"name":"data","type":[{"s":"string"}]}]}],"operations":[{"id":"Envelopes/AuditTrail/contract/AuditTrail/Append","name":"Append","mode":"command","input":[{"name":"envelopeId","type":[{"s":"string"}]},{"name":"entry","type":[{"s":"AuditEntry","ref":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditEntry"}]}],"output":null,"errors":[]},{"id":"Envelopes/AuditTrail/contract/AuditTrail/List","name":"List","mode":"query","input":[{"name":"envelopeId","type":[{"s":"string"}]}],"output":[{"s":"AuditEntry","ref":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditEntry"},{"s":"[]"}],"errors":[]}],"events":[]}],"aggregates":[],"entities":[{"id":"Envelopes/AuditTrail/entity/DocumentAuditLog","name":"DocumentAuditLog","note":"type is a free-text column; the list of types lives in code, so adding one needs no migration.","sources":[],"fields":[{"name":"id","type":[{"s":"string"}],"key":true},{"name":"envelopeId","type":[{"s":"string"},{"s":"?"}],"key":false},{"name":"type","type":[{"s":"string"}],"key":false},{"name":"data","type":[{"s":"string"}],"key":false},{"name":"email","type":[{"s":"string"},{"s":"?"}],"key":false},{"name":"createdAt","type":[{"s":"datetime"}],"key":false}],"indexes":["envelopeId"],"access":["save","find by envelopeId"]}],"modules":[]},{"id":"Envelopes/Sealing","name":"Sealing","purpose":"Burns signatures into the PDF and signs it once every recipient has acted.","depth":"stub","sources":["packages/lib/jobs/definitions/internal/seal-document.handler.ts"],"usedBy":["Envelopes"],"contracts":[{"id":"Envelopes/Sealing/contract/Sealing","name":"Sealing","sources":[],"types":[],"operations":[],"events":[]}],"aggregates":[],"entities":[],"modules":[]}]},{"id":"Emails","name":"Emails","purpose":"Sends every email about an envelope: signing requests, confirmations, notices to the sender.","depth":"mapped","note":"Each email is a background job whose handler reads the envelope through Prisma itself. Conceptually it reads through GetEnvelope.","sources":["packages/lib/jobs/definitions/emails/","packages/email/templates/"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"modules":[]},{"id":"Webhooks","name":"Webhooks","purpose":"Lets a team register URLs for envelope events, and delivers and logs each call.","depth":"mapped","sources":["packages/lib/server-only/webhooks/","packages/lib/server-only/webhooks/trigger/trigger-webhook.ts (triggerWebhook)"],"usedBy":["Api"],"contracts":[{"id":"Webhooks/contract/Webhooks","name":"Webhooks","sources":[],"types":[{"id":"Webhooks/contract/Webhooks/type/WebhookEvent","name":"WebhookEvent","kind":"enum","values":["DOCUMENT_SENT","DOCUMENT_OPENED","DOCUMENT_SIGNED","DOCUMENT_RECIPIENT_COMPLETED","DOCUMENT_COMPLETED","DOCUMENT_REJECTED","DOCUMENT_CANCELLED","RECIPIENT_EXPIRED","RECIPIENT_DELEGATED"]},{"id":"Webhooks/contract/Webhooks/type/WebhookView","name":"WebhookView","kind":"record","fields":[{"name":"id","type":[{"s":"string"}]},{"name":"webhookUrl","type":[{"s":"string"}]},{"name":"eventTriggers","type":[{"s":"WebhookEvent","ref":"Webhooks/contract/Webhooks/type/WebhookEvent"},{"s":"[]"}]},{"name":"enabled","type":[{"s":"boolean"}]}]}],"operations":[{"id":"Webhooks/contract/Webhooks/CreateWebhook","name":"CreateWebhook","mode":"command","input":[{"name":"teamId","type":[{"s":"int"}]},{"name":"webhookUrl","type":[{"s":"string"}]},{"name":"eventTriggers","type":[{"s":"WebhookEvent","ref":"Webhooks/contract/Webhooks/type/WebhookEvent"},{"s":"[]"}]}],"output":[{"s":"WebhookView","ref":"Webhooks/contract/Webhooks/type/WebhookView"}],"errors":["InvalidUrl"]},{"id":"Webhooks/contract/Webhooks/ListForTeam","name":"ListForTeam","mode":"query","input":[{"name":"teamId","type":[{"s":"int"}]}],"output":[{"s":"WebhookView","ref":"Webhooks/contract/Webhooks/type/WebhookView"},{"s":"[]"}],"errors":[]}],"events":[]}],"aggregates":[],"entities":[{"id":"Webhooks/entity/Webhook","name":"Webhook","note":"Looked up by team and event on every trigger (get-all-webhooks-by-event-trigger.ts) with no index on teamId.","sources":["packages/prisma/schema.prisma:184 (Webhook)"],"fields":[{"name":"id","type":[{"s":"string"}],"key":true},{"name":"teamId","type":[{"s":"int"}],"key":false},{"name":"webhookUrl","type":[{"s":"string"}],"key":false},{"name":"eventTriggers","type":[{"s":"WebhookEvent","ref":"Webhooks/contract/Webhooks/type/WebhookEvent"},{"s":"[]"}],"key":false},{"name":"enabled","type":[{"s":"boolean"}],"key":false}],"indexes":[],"access":["get by key","find by teamId","save"]},{"id":"Webhooks/entity/WebhookCall","name":"WebhookCall","sources":["packages/prisma/schema.prisma:204 (WebhookCall)"],"fields":[{"name":"id","type":[{"s":"string"}],"key":true},{"name":"webhookId","type":[{"s":"string"}],"key":false},{"name":"event","type":[{"s":"WebhookEvent","ref":"Webhooks/contract/Webhooks/type/WebhookEvent"}],"key":false},{"name":"status","type":[{"s":"string"}],"key":false},{"name":"responseCode","type":[{"s":"int"}],"key":false},{"name":"createdAt","type":[{"s":"datetime"}],"key":false}],"indexes":[],"access":["find by webhookId","save"]}],"modules":[]},{"id":"Accounts","name":"Accounts","purpose":"Users, teams and organisations, their members and the default settings a team gives new envelopes.","depth":"stub","sources":["packages/lib/server-only/team/","packages/lib/server-only/organisation/","packages/lib/server-only/user/"],"usedBy":["Envelopes","Api"],"contracts":[{"id":"Accounts/contract/Accounts","name":"Accounts","sources":[],"types":[],"operations":[],"events":[]}],"aggregates":[],"entities":[],"modules":[]},{"id":"Templates","name":"Templates","purpose":"Reusable envelopes, direct links and bulk send. Creates envelopes from a template.","depth":"stub","sources":["packages/lib/server-only/template/"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"modules":[]},{"id":"Api","name":"Api","purpose":"The tRPC routes (API v2 and the app) and the ts-rest API v1. Thin: validates input and calls the contracts.","depth":"stub","sources":["packages/trpc/server/","packages/api/v1/"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"modules":[]}],"edges":[{"from":"Envelopes","to":"Envelopes/SigningOrder/contract/SigningOrder","kind":"call"},{"from":"Envelopes","to":"Envelopes/AuditTrail/contract/AuditTrail","kind":"call"},{"from":"Envelopes","to":"Envelopes/Sealing/contract/Sealing","kind":"call"},{"from":"Envelopes","to":"Accounts/contract/Accounts","kind":"call"},{"from":"Emails","to":"Envelopes/contract/Envelopes","kind":"call"},{"from":"Envelopes/contract/Envelopes","to":"Emails","kind":"event","label":"SigningRequested, RecipientCompleted, RecipientRejected, EnvelopeCompleted, RecipientDelegated"},{"from":"Webhooks","to":"Envelopes/contract/Envelopes","kind":"call"},{"from":"Envelopes/contract/Envelopes","to":"Webhooks","kind":"event","label":"SigningRequested, RecipientCompleted, RecipientRejected, EnvelopeCompleted, EnvelopeRejected, RecipientDelegated"},{"from":"Templates","to":"Envelopes/contract/Envelopes","kind":"call"},{"from":"Api","to":"Envelopes/contract/Envelopes","kind":"call"},{"from":"Api","to":"Envelopes/contract/Signing","kind":"call"},{"from":"Api","to":"Webhooks/contract/Webhooks","kind":"call"},{"from":"Api","to":"Accounts/contract/Accounts","kind":"call"}],"diagnostics":[{"level":"warning","at":"Webhooks / WebhookRepository","message":"findBy teamId has no supporting index on Webhook"},{"level":"warning","at":"Webhooks / WebhookCallRepository","message":"findBy webhookId has no supporting index on WebhookCall"}]},"changes":[{"module":"Envelopes/AuditTrail","tag":"breaking","what":"AuditTrail: AuditType gains value \"DOCUMENT_RECIPIENT_DELEGATED\" (exhaustive switches must handle it)","short":"gains value \"DOCUMENT_RECIPIENT_DELEGATED\" (exhaustive switches must handle it)","contract":"AuditTrail","node":"Envelopes/AuditTrail/contract/AuditTrail/type/AuditType"},{"module":"Envelopes","tag":"migration","what":"DocumentMeta: add column allowDelegation: boolean?","short":"add column allowDelegation: boolean?","node":"Envelopes/entity/DocumentMeta"},{"module":"Envelopes","tag":"migration","what":"Recipient: add column delegatedFromId: int?","short":"add column delegatedFromId: int?","node":"Envelopes/entity/Recipient"},{"module":"Envelopes","tag":"internal","what":"Envelope: new invariant: A recipient's signingStatus moves from NOT_SIGNED to SIGNED, REJECTED or DELEGATED, never back.","short":"new invariant: A recipient's signingStatus moves from NOT_SIGNED to SIGNED, REJECTED or DELEGATED, never back.","node":"Envelopes/aggregate/Envelope"},{"module":"Envelopes","tag":"internal","what":"Envelope: new invariant: Delegating creates a new recipient in the same signing position, moves the original's unfilled fields to it, and the original's token stops working.","short":"new invariant: Delegating creates a new recipient in the same signing position, moves the original's unfilled fields to it, and the original's token stops working.","node":"Envelopes/aggregate/Envelope"},{"module":"Envelopes","tag":"internal","what":"Envelope: new invariant: Only a SIGNER or APPROVER who has not acted can delegate, and only when the envelope allows it.","short":"new invariant: Only a SIGNER or APPROVER who has not acted can delegate, and only when the envelope allows it.","node":"Envelopes/aggregate/Envelope"},{"module":"Envelopes","tag":"breaking","what":"Envelopes: SigningStatus gains value \"DELEGATED\" (exhaustive switches must handle it)","short":"gains value \"DELEGATED\" (exhaustive switches must handle it)","contract":"Envelopes","node":"Envelopes/contract/Envelopes/type/SigningStatus"},{"module":"Envelopes","tag":"additive","what":"Envelopes: RecipientView gains field delegatedFromId","short":"gains field delegatedFromId","contract":"Envelopes","node":"Envelopes/contract/Envelopes/type/RecipientView"},{"module":"Envelopes","tag":"additive","what":"Envelopes: EnvelopeSettings gains field allowDelegation","short":"gains field allowDelegation","contract":"Envelopes","node":"Envelopes/contract/Envelopes/type/EnvelopeSettings"},{"module":"Envelopes","tag":"additive","what":"Envelopes: new event RecipientDelegated","short":"new event","contract":"Envelopes","node":"Envelopes/contract/Envelopes/RecipientDelegated"},{"module":"Envelopes","tag":"additive","what":"Signing: new type DelegateTo","short":"new type","contract":"Signing","node":"Envelopes/contract/Signing/type/DelegateTo"},{"module":"Envelopes","tag":"additive","what":"Signing: new command Delegate","short":"new command","contract":"Signing","node":"Envelopes/contract/Signing/Delegate"},{"module":"Envelopes","tag":"migration","what":"Recipient.signingStatus: database enum gains \"DELEGATED\"","short":"signingStatus: database enum gains \"DELEGATED\"","node":"Envelopes/entity/Recipient"},{"module":"Emails","tag":"internal","what":"now reacts to Envelopes.RecipientDelegated","node":"Emails"},{"module":"Webhooks","tag":"internal","what":"now reacts to Envelopes.RecipientDelegated","node":"Webhooks"},{"module":"Webhooks","tag":"breaking","what":"Webhooks: WebhookEvent gains value \"RECIPIENT_DELEGATED\" (exhaustive switches must handle it)","short":"gains value \"RECIPIENT_DELEGATED\" (exhaustive switches must handle it)","contract":"Webhooks","node":"Webhooks/contract/Webhooks/type/WebhookEvent"},{"module":"Webhooks","tag":"migration","what":"Webhook.eventTriggers: database enum gains \"RECIPIENT_DELEGATED\"","short":"eventTriggers: database enum gains \"RECIPIENT_DELEGATED\"","node":"Webhooks/entity/Webhook"},{"module":"Webhooks","tag":"migration","what":"WebhookCall.event: database enum gains \"RECIPIENT_DELEGATED\"","short":"event: database enum gains \"RECIPIENT_DELEGATED\"","node":"Webhooks/entity/WebhookCall"}]}</script>
+<script>
+// In-page renderer for a plan document. Reads #plan-doc and #plan-view and
+// draws the standard layout. No dependencies, no network.
+//
+// One canvas holds everything about structure: modules as cards laid out as
+// a graph (springs along dependencies, repulsion between cards), contracts
+// and stored data as rows that expand in place, types that open as cards
+// where they are defined and wire back to every visible use. Changes are
+// shown on the node they affect. Everything starts collapsed. Context
+// (phases, questions, decisions) sits below in collapsible sections; the
+// sidebar is only for the conversation.
+(() => {
+  "use strict";
+  const doc = JSON.parse(document.getElementById("plan-doc").textContent);
+  const view = JSON.parse(document.getElementById("plan-view").textContent);
+  const TAGS = ["breaking", "migration", "additive", "internal"];
+  const NOTES_KEY = `plan-notes:${doc.title}`;
+
+  const state = {
+    tab: view.proposed ? "change" : "current",
+    open: new Set(),
+    selected: null,
+    phase: null,
+    hover: null,
+    notes: loadNotes(),
+    draft: "",
+    pos: loadPos(),            // module id -> card centre, in canvas units
+    view: { x: 0, y: 0, k: 1 }, // pan and zoom of the canvas
+    fitted: false,
+    ctxOpen: new Set(),        // which context sections below the canvas are open
+  };
+
+  // ---- DOM helpers ------------------------------------------------------------
+  const SVG = "http://www.w3.org/2000/svg";
+  const h = (tag, attrs, ...kids) => fill(document.createElement(tag), attrs, kids);
+  const s = (tag, attrs, ...kids) => fill(document.createElementNS(SVG, tag), attrs, kids);
+  function fill(el, attrs, kids) {
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v == null || v === false) continue;
+      if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const k of kids.flat(Infinity)) if (k != null && k !== false) el.append(k instanceof Node ? k : String(k));
+    return el;
+  }
+  const cls = (...xs) => xs.filter(Boolean).join(" ");
+
+  // ---- tree lookups -----------------------------------------------------------
+  const tree = () => (state.tab === "current" ? view.current : view.proposed);
+
+  // Every module in the tree, sub-modules included.
+  const everyModule = (ms) => ms.flatMap((m) => [m, ...everyModule(m.modules)]);
+
+  function allIds(t) {
+    const out = new Set();
+    for (const m of everyModule(t.modules)) {
+      out.add(m.id);
+      for (const c of m.contracts) {
+        out.add(c.id);
+        for (const x of [...c.operations, ...c.events, ...c.types]) out.add(x.id);
+      }
+      for (const e of m.entities) out.add(e.id);
+      for (const a of m.aggregates) out.add(a.id);
+    }
+    return out;
+  }
+
+  // A change is shown on the deepest node that exists in the tree being drawn.
+  function placeOf(change, ids) {
+    let id = change.node;
+    while (id && !ids.has(id)) id = id.includes("/") ? id.slice(0, id.lastIndexOf("/")).replace(/\/(contract|entity|type|aggregate)$/, "") : null;
+    return id || change.module;
+  }
+
+  const under = (id, n) => id === n || id.startsWith(n + "/");
+  const phaseNodes = () => (state.phase == null ? null : doc.slices[state.phase].nodes);
+  const changeInPhase = (c, nodes) => nodes.some((n) => under(c.node, n) || c.module === n);
+  const nodeInPhase = (id) => {
+    const nodes = phaseNodes();
+    return !nodes || nodes.some((n) => under(id, n) || under(n, id));
+  };
+
+  function changesByPlace() {
+    const map = new Map();
+    if (state.tab !== "change") return map;
+    const ids = allIds(tree());
+    const nodes = phaseNodes();
+    for (const c of view.changes) {
+      if (nodes && !changeInPhase(c, nodes)) continue;
+      if (c.tag === "internal") continue; // drawn as new wires instead
+      const p = placeOf(c, ids);
+      if (!map.has(p)) map.set(p, []);
+      map.get(p).push(c);
+    }
+    return map;
+  }
+  const worst = (cs) => TAGS.find((t) => cs.some((c) => c.tag === t));
+
+  // In the change view, everything a change touches starts open.
+  function openChanged() {
+    const ids = allIds(view.proposed);
+    for (const c of view.changes) {
+      const p = placeOf(c, ids);
+      const parts = p.split("/");
+      for (let i = 2; i <= parts.length; i++) state.open.add(parts.slice(0, i).join("/"));
+    }
+  }
+
+  // ---- interactions -------------------------------------------------------------
+  function select(id) {
+    state.selected = state.selected === id ? null : id;
+    render();
+  }
+  function toggle(id) {
+    state.open.has(id) ? state.open.delete(id) : state.open.add(id);
+    state.selected = id;
+    render();
+  }
+  // Open a referenced type or table where it is defined, then point at it.
+  function reveal(ref) {
+    const typeAt = ref.indexOf("/type/");
+    if (typeAt >= 0) state.open.add(ref.slice(0, typeAt));
+    state.open.add(ref);
+    state.selected = ref;
+    render();
+    const el = document.querySelector(`[data-node-id="${CSS.escape(ref)}"]`);
+    if (el) {
+      centerOn(el);
+      el.classList.add("flash");
+      setTimeout(() => el.classList.remove("flash"), 900);
+    }
+  }
+  function hover(ref) {
+    state.hover = ref;
+    document.querySelectorAll(".hot-type").forEach((el) => el.classList.remove("hot-type"));
+    if (ref) document.querySelectorAll(`[data-ref="${CSS.escape(ref)}"], [data-node-id="${CSS.escape(ref)}"]`).forEach((el) => el.classList.add("hot-type"));
+    drawWires();
+  }
+  // "Orders/contract/Orders/CancelOrder" reads as "Orders › CancelOrder".
+  const pretty = (id) => id.split(/\/(?:contract|entity|type|aggregate)\/|\//)
+    .filter((p, i, xs) => p !== xs[i - 1]).join(" › ");
+
+  // ---- canvas -------------------------------------------------------------------
+  function canvas() {
+    const t = tree();
+    const ctx = { placed: changesByPlace() };
+    const tool = (label, title, fn) => h("button", { class: "tool", title, "aria-label": title, onclick: fn }, label);
+    const legend = h("div", { class: "legend" },
+      h("span", { class: "lg-call" }, "calls"), h("span", { class: "lg-event" }, "reacts to event"),
+      h("span", { class: "lg-type" }, "uses type"),
+      state.tab === "change" ? h("span", { class: "lg-new" }, "new dependency") : null,
+      state.tab === "change" ? TAGS.slice(0, 3).map((x) => h("span", { class: `lg-tag ${x}` }, x)) : null,
+      h("span", { class: "hint" }, "drag cards · drag the background to pan · ctrl + scroll to zoom"));
+    const viewport = h("div", { class: "viewport", id: "viewport" },
+      h("div", { class: "layer", id: "layer", style: layerTransform() },
+        // Dependencies run under the cards; type links run over them, since
+        // they start inside a card.
+        s("svg", { class: "wires under", id: "wires", width: 1, height: 1, "aria-hidden": "true" }),
+        t.modules.map((m) => moduleCard(m, ctx)),
+        s("svg", { class: "wires over", id: "type-wires", width: 1, height: 1, "aria-hidden": "true" })),
+      h("div", { class: "tools" },
+        tool("Fit", "Fit everything in view", fit),
+        tool("+", "Zoom in", () => zoomAt(1.25)),
+        tool("−", "Zoom out", () => zoomAt(0.8)),
+        state.tab === "change" ? tool("Open changes", "Open everything the change touches", () => { openChanged(); render(); }) : null,
+        tool("Collapse", "Collapse everything", () => { state.open.clear(); render(); }),
+        tool("Re-arrange", "Lay the graph out again", () => { state.pos = new Map(); savePos(); state.fitted = false; render(); })));
+    panZoom(viewport);
+    return h("div", { class: "canvas-wrap" }, viewport, legend);
+  }
+
+  // ---- graph layout ---------------------------------------------------------------
+  // Modules are placed by a small force simulation: springs along every
+  // relationship (calls, events, shared types), repulsion between all cards,
+  // and overlap removal using each card's real size. Cards a person dragged
+  // stay where they were put. Expanding a card re-runs a short, gentle pass so
+  // its neighbours make room without the whole graph moving.
+  function links(t) {
+    const out = new Map();
+    const add = (a, b, w) => {
+      if (!a || !b || a === b) return;
+      const k = a < b ? `${a}|${b}` : `${b}|${a}`;
+      out.set(k, { a, b, w: Math.max(out.get(k)?.w || 0, w) });
+    };
+    const mod = (id) => id.split("/")[0];
+    for (const e of t.edges) add(mod(e.from), mod(e.to), 1);
+    for (const m of everyModule(t.modules)) {
+      const refs = [];
+      for (const c of m.contracts) {
+        for (const o of c.operations) refs.push(...o.input.flatMap((f) => f.type), ...(o.output || []));
+        for (const e of c.events) refs.push(...e.payload.flatMap((f) => f.type));
+        for (const ty of c.types) refs.push(...(ty.fields || []).flatMap((f) => f.type));
+      }
+      for (const e of m.entities) refs.push(...e.fields.flatMap((f) => f.type));
+      for (const r of refs) if (r.ref) add(mod(m.id), mod(r.ref), 0.5);
+    }
+    return [...out.values()];
+  }
+
+  function layoutGraph() {
+    const layer = document.getElementById("layer");
+    if (!layer) return;
+    const t = tree();
+    const els = [...layer.querySelectorAll(":scope > .card")];
+    const nodes = els.map((el) => ({ id: el.getAttribute("data-node-id"), el, w: el.offsetWidth, h: el.offsetHeight }));
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const ls = links(t).filter((l) => byId.has(l.a) && byId.has(l.b));
+    const fresh = nodes.filter((n) => !state.pos.has(n.id));
+    const placedBefore = nodes.length - fresh.length;
+    // New cards start near what they connect to, or on a ring.
+    fresh.forEach((n, i) => {
+      const near = ls.filter((l) => l.a === n.id || l.b === n.id).map((l) => state.pos.get(l.a === n.id ? l.b : l.a)).filter(Boolean);
+      if (near.length) {
+        const cx = near.reduce((a, p) => a + p.x, 0) / near.length, cy = near.reduce((a, p) => a + p.y, 0) / near.length;
+        state.pos.set(n.id, { x: cx + 200 * Math.cos(i * 2.4), y: cy + 200 * Math.sin(i * 2.4) });
+      } else {
+        const a = (i / Math.max(1, fresh.length)) * Math.PI * 2;
+        const r = 260 + 40 * fresh.length;
+        state.pos.set(n.id, { x: r * Math.cos(a), y: r * Math.sin(a) * 0.7 });
+      }
+    });
+    for (const n of nodes) Object.assign(n, state.pos.get(n.id));
+    const focus = new Set(view.changes.map((c) => c.module));
+    const full = placedBefore === 0;
+    simulate(nodes, ls, full ? 500 : 80, full ? 1 : 0.15, focus);
+    for (const n of nodes) {
+      state.pos.set(n.id, { x: n.x, y: n.y, pinned: state.pos.get(n.id)?.pinned });
+      place(n);
+    }
+    savePos();
+  }
+
+  function simulate(nodes, ls, iterations, strength, focus) {
+    const PAD = 36;
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const pinned = (n) => state.pos.get(n.id)?.pinned;
+    for (let i = 0; i < iterations; i++) {
+      const alpha = strength * (1 - i / iterations);
+      for (const n of nodes) { n.vx = 0; n.vy = 0; }
+      for (const l of ls) {
+        const a = byId.get(l.a), b = byId.get(l.b);
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+        const rest = (a.w + b.w) / 2 + 140;
+        const f = (d - rest) * 0.04 * l.w * alpha;
+        a.vx += (dx / d) * f; a.vy += (dy / d) * f;
+        b.vx -= (dx / d) * f; b.vy -= (dy / d) * f;
+      }
+      for (let p = 0; p < nodes.length; p++) {
+        for (let q = p + 1; q < nodes.length; q++) {
+          const a = nodes[p], b = nodes[q];
+          const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy + 1, d = Math.sqrt(d2);
+          const f = (120000 / d2) * alpha;
+          a.vx -= (dx / d) * f; a.vy -= (dy / d) * f;
+          b.vx += (dx / d) * f; b.vy += (dy / d) * f;
+        }
+      }
+      for (const n of nodes) {
+        const g = (focus.has(n.id.split("/")[0]) ? 0.02 : 0.006) * alpha;
+        n.vx -= n.x * g; n.vy -= n.y * g * 1.6;
+        if (!pinned(n)) { n.x += clamp(n.vx, 60); n.y += clamp(n.vy, 60); }
+      }
+      // Overlap removal runs at full strength every step: cards never overlap.
+      for (let p = 0; p < nodes.length; p++) {
+        for (let q = p + 1; q < nodes.length; q++) {
+          const a = nodes[p], b = nodes[q];
+          const ox = (a.w + b.w) / 2 + PAD - Math.abs(b.x - a.x);
+          const oy = (a.h + b.h) / 2 + PAD - Math.abs(b.y - a.y);
+          if (ox <= 0 || oy <= 0) continue;
+          const pa = pinned(a) ? 0 : pinned(b) ? 1 : 0.5, pb = 1 - pa;
+          if (ox < oy) {
+            const sx = Math.sign(b.x - a.x) || 1;
+            a.x -= sx * ox * pa; b.x += sx * ox * pb;
+          } else {
+            const sy = Math.sign(b.y - a.y) || 1;
+            a.y -= sy * oy * pa; b.y += sy * oy * pb;
+          }
+        }
+      }
+    }
+  }
+  // Sources and notes stay one or two lines until clicked, so real code with
+  // long paths does not push a card's contracts off screen.
+  function srcLine(list) {
+    if (!list.length) return null;
+    if (list.length === 1) return h("p", { class: "src" }, list[0]);
+    return h("details", { class: "src", onclick: (ev) => ev.stopPropagation() },
+      h("summary", {}, `${list[0]} +${list.length - 1}`),
+      ...list.slice(1).map((x) => h("div", {}, x)));
+  }
+  function noteLine(text) {
+    if (!text) return null;
+    return h("p", { class: "note clamp", title: "Click to read all",
+      onclick: (ev) => { ev.stopPropagation(); ev.currentTarget.classList.toggle("clamp"); drawWires(); } }, text);
+  }
+
+  const clamp = (v, m) => Math.max(-m, Math.min(m, v));
+  function place(n) {
+    n.el.style.left = `${n.x - n.w / 2}px`;
+    n.el.style.top = `${n.y - n.h / 2}px`;
+    n.el.style.visibility = "visible";
+  }
+
+  // ---- pan, zoom, drag ----------------------------------------------------------------
+  const layerTransform = () => `transform: translate(${state.view.x}px, ${state.view.y}px) scale(${state.view.k})`;
+  function applyView() {
+    const layer = document.getElementById("layer");
+    if (layer) layer.style.transform = `translate(${state.view.x}px, ${state.view.y}px) scale(${state.view.k})`;
+  }
+  function zoomAt(f, cx, cy) {
+    const vp = document.getElementById("viewport");
+    if (!vp) return;
+    const r = vp.getBoundingClientRect();
+    const px = cx ?? r.width / 2, py = cy ?? r.height / 2;
+    const k = Math.max(0.25, Math.min(2.5, state.view.k * f));
+    state.view.x = px - ((px - state.view.x) * k) / state.view.k;
+    state.view.y = py - ((py - state.view.y) * k) / state.view.k;
+    state.view.k = k;
+    applyView();
+  }
+  function fit() {
+    const vp = document.getElementById("viewport");
+    const cards = [...document.querySelectorAll("#layer > .card")];
+    if (!vp || !cards.length) return;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const c of cards) {
+      const l = parseFloat(c.style.left), t = parseFloat(c.style.top);
+      x0 = Math.min(x0, l); y0 = Math.min(y0, t);
+      x1 = Math.max(x1, l + c.offsetWidth); y1 = Math.max(y1, t + c.offsetHeight);
+    }
+    const W = vp.clientWidth, H = vp.clientHeight, M = 32;
+    const k = Math.max(0.3, Math.min(1, (W - 2 * M) / (x1 - x0), (H - 2 * M) / (y1 - y0)));
+    state.view = { k, x: W / 2 - ((x0 + x1) / 2) * k, y: H / 2 - ((y0 + y1) / 2) * k };
+    applyView();
+  }
+  function centerOn(el) {
+    const vp = document.getElementById("viewport");
+    if (!vp) return;
+    const v = vp.getBoundingClientRect(), r = el.getBoundingClientRect();
+    const inside = r.left >= v.left && r.right <= v.right && r.top >= v.top && r.bottom <= v.bottom;
+    if (inside) return;
+    state.view.x += v.left + v.width / 2 - (r.left + r.width / 2);
+    state.view.y += v.top + Math.min(v.height / 2, r.height / 2 + 40) - r.top;
+    applyView();
+  }
+
+  function panZoom(vp) {
+    let drag = null;
+    vp.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0 || ev.target.closest("button, .tools")) return;
+      const head = ev.target.closest(".card-head");
+      const card = ev.target.closest(".card");
+      if (card && !head) return; // clicks inside a card body stay clicks
+      drag = { x: ev.clientX, y: ev.clientY, moved: false, card: head ? card : null, start: { ...state.view } };
+      if (drag.card) drag.pos = { ...state.pos.get(card.getAttribute("data-node-id")) };
+      drag.pointer = ev.pointerId;
+    });
+    vp.addEventListener("pointermove", (ev) => {
+      if (!drag) return;
+      const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+      if (!drag.moved) vp.setPointerCapture(drag.pointer); // only once it is a drag, so plain clicks still land
+      drag.moved = true;
+      vp.classList.add("dragging");
+      if (drag.card) {
+        const id = drag.card.getAttribute("data-node-id");
+        const p = { x: drag.pos.x + dx / state.view.k, y: drag.pos.y + dy / state.view.k, pinned: true };
+        state.pos.set(id, p);
+        place({ el: drag.card, x: p.x, y: p.y, w: drag.card.offsetWidth, h: drag.card.offsetHeight });
+      } else {
+        state.view.x = drag.start.x + dx;
+        state.view.y = drag.start.y + dy;
+        applyView();
+      }
+      drawWires();
+    });
+    const end = () => {
+      if (drag?.moved) {
+        if (drag.card) { layoutGraph(); drawWires(); } // neighbours make room around where it was dropped
+        savePos();
+        // Swallow the click that ends a drag so it doesn't select the card.
+        vp.addEventListener("click", (e) => e.stopPropagation(), { capture: true, once: true });
+      }
+      drag = null;
+      vp.classList.remove("dragging");
+    };
+    vp.addEventListener("pointerup", end);
+    vp.addEventListener("pointercancel", end);
+    vp.addEventListener("wheel", (ev) => {
+      ev.preventDefault();
+      const r = vp.getBoundingClientRect();
+      if (ev.ctrlKey || ev.metaKey) zoomAt(Math.exp(-ev.deltaY * 0.01), ev.clientX - r.left, ev.clientY - r.top);
+      else { state.view.x -= ev.deltaX; state.view.y -= ev.deltaY; applyView(); }
+    }, { passive: false });
+  }
+
+  function loadPos() {
+    try { return new Map(JSON.parse(localStorage.getItem(`plan-pos:${doc.title}`) || "[]")); } catch { return new Map(); }
+  }
+  function savePos() {
+    try { localStorage.setItem(`plan-pos:${doc.title}`, JSON.stringify([...state.pos])); } catch { /* storage unavailable */ }
+  }
+
+  function changeList(cs) {
+    if (!cs || !cs.length) return null;
+    return h("ul", { class: "changes" }, [...cs].sort((a, b) => TAGS.indexOf(a.tag) - TAGS.indexOf(b.tag)).map((c) =>
+      h("li", { class: c.tag }, h("span", { class: `tag ${c.tag}` }, c.tag), c.short || c.what)));
+  }
+
+  const facts = (id) => (doc.facts[id] || []).map((f) =>
+    h("span", { class: "fact", title: f.detail || "" }, `${f.label} `, h("b", {}, String(f.value))));
+
+  function moduleCard(m, ctx, close) {
+    const cs = ctx.placed.get(m.id);
+    const tagged = state.tab === "change" ? worst(allChangesIn(m.id, ctx)) : null;
+    return h("article", {
+      class: cls("card", m.depth === "stub" && "stub", tagged && tagged !== "internal" && `tag-${tagged}`,
+        !nodeInPhase(m.id) && "dim", state.selected === m.id && "selected"),
+      "data-node-id": m.id,
+    },
+      h("header", { class: "card-head", onclick: () => select(m.id) },
+        h("div", { class: "title" }, h("span", { class: "name" }, m.name), m.depth === "stub" ? h("span", { class: "badge" }, "not mapped") : null, facts(m.id),
+          close ? h("button", { class: "x", "aria-label": `Close ${m.name}`, onclick: (ev) => { ev.stopPropagation(); close(); } }, "×") : null),
+        h("p", { class: "purpose" }, m.purpose),
+        srcLine(m.sources),
+        noteLine(m.note),
+        reactsTo(m),
+        changeList(cs)),
+      m.contracts.map((c) => contractRow(m, c, ctx)),
+      m.aggregates.map((a) => aggregateBox(m, a, ctx)),
+      m.entities.filter((e) => !m.aggregates.some((a) => a.root === e.id || a.members.includes(e.id))).map((e) => entityRow(e, ctx)),
+      m.modules.map((sub) => subModule(sub, ctx)));
+  }
+
+  // An aggregate is drawn as a boundary around the tables it holds, with the
+  // root first. Its invariants open with it.
+  function aggregateBox(m, a, ctx) {
+    const open = state.open.has(a.id);
+    const byId = new Map(m.entities.map((e) => [e.id, e]));
+    return h("section", { class: cls("aggregate", open && "open", state.selected === a.id && "selected", !nodeInPhase(a.id) && "dim"), "data-node-id": a.id },
+      h("button", { class: "agg-head", "aria-expanded": String(open), onclick: () => toggle(a.id) },
+        h("span", { class: "agg-label" }, `${a.name} aggregate`),
+        a.invariants.length ? h("span", { class: "meta" }, `${a.invariants.length} invariant${a.invariants.length === 1 ? "" : "s"}`) : null,
+        h("span", { class: "chev", "aria-hidden": "true" }, "›")),
+      changeList(ctx.placed.get(a.id)),
+      open && a.invariants.length ? h("ul", { class: "invariants" }, a.invariants.map((i) => h("li", {}, i))) : null,
+      [a.root, ...a.members].map((id) => byId.get(id)).filter(Boolean).map((e) => entityRow(e, ctx, e.id === a.root)));
+  }
+
+  // A sub-module is a row until opened, then a card nested inside its parent.
+  function subModule(sub, ctx) {
+    const open = state.open.has(sub.id);
+    if (open) return h("div", { class: "nested" }, moduleCard(sub, ctx, () => toggle(sub.id)));
+    const t = state.tab === "change" ? worst(allChangesIn(sub.id, ctx)) : null;
+    return h("section", { class: cls("row", "sub", state.selected === sub.id && "selected", !nodeInPhase(sub.id) && "dim"), "data-node-id": sub.id },
+      h("button", { class: cls("row-head", t && t !== "internal" && `mark-${t}`), "aria-expanded": "false", onclick: () => toggle(sub.id) },
+        boxIcon(), h("span", { class: "row-name" }, sub.name), h("span", { class: "meta" }, "inside"), facts(sub.id),
+        h("span", { class: "chev", "aria-hidden": "true" }, "›")));
+  }
+
+  // Events are the one relationship a wire can't label legibly, so the
+  // subscriber says what it listens for.
+  function reactsTo(m) {
+    const evs = tree().edges.filter((e) => e.kind === "event" && e.to === m.id);
+    if (!evs.length) return null;
+    return h("p", { class: "listens" }, "on ", evs.map((e, i) => [i ? "; " : "", h("button", {
+      class: "linklike quiet", onclick: (ev) => { ev.stopPropagation(); reveal(e.from); } }, e.from.split("/").pop()), " ", e.label]));
+  }
+
+  function allChangesIn(id, ctx) {
+    const out = [];
+    for (const [p, cs] of ctx.placed) if (under(p, id)) out.push(...cs);
+    return out;
+  }
+
+  function rowHead(id, icon, label, meta, ctx) {
+    const t = state.tab === "change" ? worst(allChangesIn(id, ctx)) : null;
+    return h("button", {
+      class: cls("row-head", t && t !== "internal" && `mark-${t}`), "aria-expanded": String(state.open.has(id)),
+      onclick: () => toggle(id),
+    }, icon, h("span", { class: "row-name" }, label), meta ? h("span", { class: "meta" }, meta) : null, facts(id),
+    h("span", { class: "chev", "aria-hidden": "true" }, "›"));
+  }
+
+  function contractRow(m, c, ctx) {
+    const open = state.open.has(c.id) && m.depth === "mapped";
+    const n = c.operations.length + c.events.length;
+    return h("section", { class: cls("row", open && "open", !nodeInPhase(c.id) && "dim", state.selected === c.id && "selected"), "data-node-id": c.id },
+      rowHead(c.id, hex(), c.name, m.depth === "stub" ? "not mapped" : `${n} member${n === 1 ? "" : "s"}`, ctx),
+      changeList(ctx.placed.get(c.id)),
+      open ? h("div", { class: "row-body" },
+        noteLine(c.note),
+        srcLine(c.sources),
+        c.operations.map((o) => member(o.id, h("span", { class: `mode ${o.mode}` }, o.mode === "command" ? "cmd" : "query"),
+          [h("span", { class: "mname" }, o.name), "(", fieldsInline(o.input), ")", " → ", o.output ? tokens(o.output) : h("span", { class: "muted" }, "void")],
+          o.errors.length ? h("div", { class: "errs" }, "fails with ", o.errors.join(", ")) : null, ctx)),
+        c.events.map((e) => member(e.id, h("span", { class: "mode event" }, "event"),
+          [h("span", { class: "mname" }, e.name), " { ", fieldsInline(e.payload), " }"], null, ctx)),
+        typeShelf(c, ctx)) : null);
+  }
+
+  function member(id, badge, sig, extra, ctx) {
+    return h("div", { class: cls("member", state.selected === id && "selected", !nodeInPhase(id) && "dim"), "data-node-id": id,
+      onclick: (ev) => { if (!ev.target.closest(".chip")) select(id); } },
+    h("div", { class: "sig" }, badge, " ", sig), extra, changeList(ctx.placed.get(id)));
+  }
+
+  // Types live under the contract that defines them: open ones as cards,
+  // the rest as chips that open them.
+  function typeShelf(c, ctx) {
+    if (!c.types.length) return null;
+    const closed = c.types.filter((t) => !state.open.has(t.id));
+    return h("div", { class: "types" },
+      c.types.filter((t) => state.open.has(t.id)).map((t) => typeCard(t, ctx)),
+      closed.length ? h("div", { class: "type-chips" }, h("span", { class: "muted" }, "types "), closed.map((t) => chip({ s: t.name, ref: t.id }))) : null);
+  }
+
+  function typeCard(t, ctx) {
+    return h("div", { class: cls("typecard", state.selected === t.id && "selected", !nodeInPhase(t.id) && "dim"), "data-node-id": t.id },
+      h("div", { class: "type-head" },
+        h("button", { class: "type-name", onclick: () => select(t.id) }, t.name, h("span", { class: "muted" }, t.kind === "enum" ? " one of" : "")),
+        h("button", { class: "x", "aria-label": `Close ${t.name}`, onclick: () => { state.open.delete(t.id); render(); } }, "×")),
+      t.kind === "enum"
+        ? h("div", { class: "values" }, t.values.map((v) => h("span", { class: "value" }, v)))
+        : h("div", { class: "fields" }, t.fields.map((f) => h("div", {}, h("span", { class: "fname" }, f.name), ": ", tokens(f.type)))),
+      changeList(ctx.placed.get(t.id)));
+  }
+
+  function entityRow(e, ctx, root) {
+    const open = state.open.has(e.id);
+    return h("section", { class: cls("row", open && "open", !nodeInPhase(e.id) && "dim", state.selected === e.id && "selected"), "data-node-id": e.id },
+      rowHead(e.id, cyl(), e.name, `${root ? "root · " : ""}${e.fields.length} fields`, ctx),
+      changeList(ctx.placed.get(e.id)),
+      open ? h("div", { class: "row-body" },
+        noteLine(e.note),
+        srcLine(e.sources),
+        h("div", { class: "fields" }, e.fields.map((f) =>
+          h("div", {}, h("span", { class: "fname" }, f.name), ": ", tokens(f.type), f.key ? h("span", { class: "key" }, "key") : null))),
+        e.indexes.length ? h("p", { class: "aux" }, "indexed on ", e.indexes.join("; ")) : null,
+        e.access.length ? h("p", { class: "aux" }, "accessed by ", e.access.join(", ")) : null) : null);
+  }
+
+  const fieldsInline = (fs) => fs.map((f, i) => [i ? ", " : "", h("span", { class: "fname" }, f.name), ": ", tokens(f.type)]);
+  const tokens = (ts) => ts.map((t) => (t.ref ? chip(t) : h("span", { class: "prim" }, t.s)));
+  const chip = (t) => h("button", {
+    class: cls("chip", state.open.has(t.ref) && "linked"), "data-ref": t.ref,
+    onclick: (ev) => { ev.stopPropagation(); reveal(t.ref); },
+    onmouseenter: () => hover(t.ref), onmouseleave: () => hover(null),
+  }, t.s);
+
+  const hex = () => s("svg", { class: "icon", viewBox: "0 0 16 16", width: 14, height: 14, "aria-hidden": "true" },
+    s("polygon", { points: "15,8 11.5,14.1 4.5,14.1 1,8 4.5,1.9 11.5,1.9" }));
+  const boxIcon = () => s("svg", { class: "icon", viewBox: "0 0 16 16", width: 14, height: 14, "aria-hidden": "true" },
+    s("rect", { x: 1.5, y: 2.5, width: 13, height: 11, rx: 2 }), s("path", { d: "M1.5,6 h13" }));
+  const cyl = () => s("svg", { class: "icon", viewBox: "0 0 16 16", width: 14, height: 14, "aria-hidden": "true" },
+    s("ellipse", { cx: 8, cy: 4, rx: 6, ry: 2.4 }), s("path", { d: "M2,4 v8 a6,2.4 0 0 0 12,0 v-8" }));
+
+  // ---- wires --------------------------------------------------------------------
+  function drawWires() {
+    const layer = document.getElementById("layer"), svg = document.getElementById("wires"), over = document.getElementById("type-wires");
+    if (!layer || !svg || !over) return;
+    over.replaceChildren();
+    const base = layer.getBoundingClientRect(), k = state.view.k;
+    // Positions in canvas units, whatever the current pan and zoom.
+    const box = (el) => {
+      const r = el.getBoundingClientRect();
+      return {
+        l: (r.left - base.left) / k, r: (r.right - base.left) / k, t: (r.top - base.top) / k, b: (r.bottom - base.top) / k,
+        cx: (r.left + r.width / 2 - base.left) / k, cy: (r.top + r.height / 2 - base.top) / k,
+      };
+    };
+    svg.replaceChildren(s("defs", {},
+      s("marker", { id: "ah", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
+        s("path", { d: "M0,0 L10,5 L0,10 z", class: "ah" })),
+      s("marker", { id: "ah-hot", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
+        s("path", { d: "M0,0 L10,5 L0,10 z", class: "ah hot" }))));
+    // The element for a node, or for its nearest ancestor that is on screen
+    // (a contract inside a closed sub-module is drawn at the sub-module).
+    const find = (id) => {
+      for (let x = id; x; x = x.includes("/") ? x.slice(0, x.lastIndexOf("/")) : null) {
+        const el = layer.querySelector(`[data-node-id="${CSS.escape(x)}"]`);
+        if (el) return el;
+      }
+      return null;
+    };
+    // Where a wire may attach. A card offers the middle of all four sides; a
+    // row offers the card's left and right edges at the row's height.
+    const sides = (el) => {
+      if (el.matches(".card")) {
+        const b = box(el);
+        return [
+          { x: b.cx, y: b.t, nx: 0, ny: -1 }, { x: b.cx, y: b.b, nx: 0, ny: 1 },
+          { x: b.l, y: b.cy, nx: -1, ny: 0 }, { x: b.r, y: b.cy, nx: 1, ny: 0 },
+        ];
+      }
+      const card = box(el.closest(".card")), row = box(el.querySelector(":scope > .row-head, :scope > .agg-head") || el);
+      return [{ x: card.l, y: row.cy, nx: -1, ny: 0 }, { x: card.r, y: row.cy, nx: 1, ny: 0 }];
+    };
+    // Pick the pair of attachment points that face each other most directly.
+    // `shift` slides both ends along their side, so a call and the events
+    // coming back between the same two nodes don't sit on one line.
+    const link = (fromEl, toEl, shift = 0) => {
+      let best = null;
+      for (const a of sides(fromEl)) for (const b of sides(toEl)) {
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+        // Prefer sides that point towards the other end.
+        const facing = (a.nx * dx + a.ny * dy) / d - (b.nx * dx + b.ny * dy) / d;
+        const score = d - facing * 120;
+        if (!best || score < best.score) best = { a, b, d, score };
+      }
+      const { d } = best, k = Math.max(30, Math.min(160, d * 0.4));
+      const a = { ...best.a, x: best.a.x + best.a.ny * shift, y: best.a.y + best.a.nx * shift };
+      const b = { ...best.b, x: best.b.x + best.b.ny * shift, y: best.b.y + best.b.nx * shift };
+      return `M${a.x},${a.y} C${a.x + a.nx * k},${a.y + a.ny * k} ${b.x + b.nx * k},${b.y + b.ny * k} ${b.x},${b.y}`;
+    };
+    const sel = state.selected;
+    const before = new Set(view.current.edges.map((e) => `${e.kind} ${e.from} ${e.to}`));
+
+    for (const e of tree().edges) {
+      const call = e.kind === "call";
+      const from = find(e.from), to = find(e.to);
+      // A module and what sits inside it are already related by nesting.
+      if (!from || !to || from === to || from.contains(to) || to.contains(from)) continue;
+      const hot = sel && (under(sel, e.from) || under(sel, e.to));
+      const fresh = state.tab === "change" && !before.has(`${e.kind} ${e.from} ${e.to}`);
+      svg.append(s("path", {
+        d: link(from, to, call ? 0 : 10),
+        class: cls("wire", call ? "call" : "event", fresh && "new", hot && "hot", sel && !hot && "faded"),
+        "marker-end": `url(#${hot ? "ah-hot" : "ah"})`,
+      }));
+    }
+
+    // Type wires: from each visible use of an open type to its card, when the
+    // two are in different cards (inside one card, hover highlighting is enough).
+    const chipSides = (el) => {
+      const b = box(el);
+      return [{ x: b.l, y: b.cy, nx: -1, ny: 0 }, { x: b.r, y: b.cy, nx: 1, ny: 0 }];
+    };
+    for (const target of layer.querySelectorAll(".typecard, .row.open[data-node-id*='/entity/']")) {
+      const id = target.getAttribute("data-node-id");
+      const head = target.querySelector(".type-head, .row-head");
+      const home = target.closest(".card");
+      for (const c of layer.querySelectorAll(`.chip[data-ref="${CSS.escape(id)}"]`)) {
+        if (c.closest(".card") === home || c.closest(".type-chips")) continue;
+        const hot = state.hover === id || sel === id;
+        let best = null;
+        for (const a of chipSides(c)) for (const b of chipSides(head)) {
+          const d = Math.hypot(b.x - a.x, b.y - a.y);
+          if (!best || d < best.d) best = { a, b, d };
+        }
+        const { a, b, d } = best, k = Math.max(30, Math.min(140, d * 0.4));
+        over.append(s("path", {
+          d: `M${a.x},${a.y} C${a.x + a.nx * k},${a.y} ${b.x + b.nx * k},${b.y} ${b.x},${b.y}`,
+          class: cls("wire", "type", hot && "hot"),
+        }));
+      }
+    }
+  }
+
+  // ---- below the canvas: context ---------------------------------------------------
+  function context() {
+    const parts = [];
+    const section = (key, title, count, ...body) => h("details", {
+      class: "ctx", open: state.ctxOpen.has(key),
+      ontoggle: (ev) => { ev.target.open ? state.ctxOpen.add(key) : state.ctxOpen.delete(key); },
+    }, h("summary", {}, h("h2", {}, title, h("span", { class: "count" }, String(count)))), body);
+    if (view.changes.length && doc.slices.length) {
+      const ids = allIds(view.proposed);
+      const taken = new Set();
+      const phaseCards = h("div", { class: "phases" }, doc.slices.map((sl, i) => {
+        const cs = view.changes.filter((c) => !taken.has(c) && changeInPhase(c, sl.nodes));
+        cs.forEach((c) => taken.add(c));
+        const counts = TAGS.map((t) => [t, cs.filter((c) => c.tag === t).length]).filter(([, n]) => n);
+        return h("div", { class: cls("phase", state.phase === i && "active") },
+          h("h3", {}, h("span", { class: "muted" }, `Phase ${i + 1} `), sl.name),
+          h("p", {}, sl.goal),
+          sl.notes ? h("p", { class: "muted" }, sl.notes) : null,
+          h("p", { class: "counts" }, counts.map(([t, n]) => h("span", { class: `tag ${t}` }, `${n} ${t}`))),
+          h("button", { class: "linklike", onclick: () => showPhase(i) }, state.phase === i ? "Showing on the map" : "Show on the map"));
+      }));
+      const rest = view.changes.filter((c) => !taken.has(c) && c.tag !== "internal");
+      parts.push(section("phases", "Phases", doc.slices.length, phaseCards,
+        rest.length ? h("p", { class: "muted" }, `${rest.length} change(s) not in a phase yet: `,
+          rest.map((c, i) => [i ? ", " : "", h("button", { class: "linklike", onclick: () => reveal(placeOf(c, ids)) }, c.what)])) : null));
+    }
+    if (doc.questions.length) {
+      parts.push(section("questions", "Open questions", doc.questions.length, h("ol", { class: "qs" }, doc.questions.map((q) => h("li", {},
+        q.text, q.node ? [" ", h("button", { class: "linklike", onclick: () => reveal(q.node) }, pretty(q.node))] : null,
+        q.options ? h("div", { class: "muted" }, q.options.join(" · ")) : null)))));
+    }
+    if (doc.decisions.length) {
+      parts.push(section("decisions", "Decisions", doc.decisions.length, h("ul", { class: "ds" }, doc.decisions.map((d) => h("li", {},
+        h("strong", {}, d.text), d.node ? [" ", h("button", { class: "linklike", onclick: () => reveal(d.node) }, pretty(d.node))] : null,
+        h("div", { class: "muted" }, d.why))))));
+    }
+    const diags = tree().diagnostics;
+    if (diags.length) {
+      state.ctxOpen.add("checks");
+      parts.push(section("checks", "Check results", diags.length, diags.map((d) =>
+        h("div", { class: `diag ${d.level}` }, h("strong", {}, d.level), " ", h("code", {}, d.at), " ", d.message))));
+    }
+    return parts.length ? h("section", { class: "context" }, parts) : null;
+  }
+
+  function showPhase(i) {
+    state.tab = "change";
+    state.phase = state.phase === i ? null : i;
+    render();
+    document.getElementById("viewport")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // ---- sidebar: the conversation ----------------------------------------------------
+  function sidebar() {
+    const anchor = state.selected;
+    const copy = () => {
+      const text = [`Notes on the plan "${doc.title}":`, ...state.notes.map((n) => `- [${n.anchor || "general"}] ${n.text}`)].join("\n");
+      navigator.clipboard?.writeText(text).then(() => flashButton("copy", "Copied"), () => flashButton("copy", "Copy failed"));
+    };
+    const queue = () => {
+      const text = state.draft.trim();
+      if (!text) return;
+      state.notes.push({ anchor, text });
+      state.draft = "";
+      saveNotes();
+      render();
+    };
+    return h("aside", { class: "chat", "aria-label": "Conversation" },
+      h("div", { class: "chat-head" }, "Conversation"),
+      h("div", { class: "msgs" },
+        h("div", { class: "msg you" }, h("div", { class: "who" }, "Intent"), doc.intent),
+        state.notes.map((n, i) => h("div", { class: "msg you queued" },
+          h("div", { class: "who" }, n.anchor ? h("button", { class: "linklike", onclick: () => reveal(n.anchor) }, pretty(n.anchor)) : "General",
+            h("button", { class: "x", "aria-label": "Remove note", onclick: () => { state.notes.splice(i, 1); saveNotes(); render(); } }, "×")),
+          n.text))),
+      h("div", { class: "composer" },
+        h("div", { class: "about" }, anchor
+          ? ["About ", h("b", {}, pretty(anchor)), h("button", { class: "x", "aria-label": "Clear", onclick: () => select(anchor) }, "×")]
+          : h("span", { class: "muted" }, "Click anything on the map to attach a note to it.")),
+        h("textarea", {
+          rows: 3, placeholder: "Write a note…", "aria-label": "Note",
+          oninput: (ev) => { state.draft = ev.target.value; },
+          onkeydown: (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); queue(); } },
+        }, state.draft),
+        h("div", { class: "actions" },
+          h("button", { class: "btn", onclick: queue }, "Add note"),
+          h("button", { class: "btn quiet", id: "copy", disabled: !state.notes.length, onclick: copy },
+            state.notes.length ? `Copy ${state.notes.length} as prompt` : "Copy as prompt"))));
+  }
+  function flashButton(id, text) {
+    const b = document.getElementById(id);
+    if (!b) return;
+    const was = b.textContent;
+    b.textContent = text;
+    setTimeout(() => { b.textContent = was; }, 1200);
+  }
+  function loadNotes() {
+    try { return JSON.parse(localStorage.getItem(NOTES_KEY) || "[]"); } catch { return []; }
+  }
+  function saveNotes() {
+    try { localStorage.setItem(NOTES_KEY, JSON.stringify(state.notes)); } catch { /* storage unavailable */ }
+  }
+
+  // ---- page ---------------------------------------------------------------------------
+  function render() {
+    const tabs = view.proposed
+      ? h("div", { class: "tabs", role: "group", "aria-label": "Which tree" },
+        [["current", "Current"], ["proposed", "Proposed"], ["change", "Change"]].map(([k, label]) =>
+          h("button", { "aria-pressed": String(state.tab === k), onclick: () => { state.tab = k; render(); } }, label)))
+      : null;
+    const phases = state.tab === "change" && doc.slices.length
+      ? h("div", { class: "phase-strip", role: "group", "aria-label": "Phase" },
+        h("button", { "aria-pressed": String(state.phase == null), onclick: () => { state.phase = null; render(); } }, "All changes"),
+        doc.slices.map((sl, i) => h("button", { "aria-pressed": String(state.phase === i), onclick: () => { state.phase = i; render(); } }, `${i + 1} · ${sl.name}`)))
+      : null;
+    const textarea = document.activeElement?.tagName === "TEXTAREA";
+    document.getElementById("app").replaceChildren(h("div", { class: "shell" },
+      h("main", { class: "main" },
+        h("header", { class: "top" },
+          h("div", { class: "heading" }, h("h1", {}, doc.title), h("span", { class: "badge" }, doc.mode === "learn" ? "learning" : "plan")),
+          h("div", { class: "controls" }, tabs, phases)),
+        canvas(),
+        context()),
+      sidebar()));
+    if (textarea) document.querySelector(".composer textarea")?.focus();
+    layoutGraph();
+    if (!state.fitted) { fit(); state.fitted = true; }
+    drawWires();
+  }
+
+  window.addEventListener("resize", () => requestAnimationFrame(drawWires));
+  render();
+})();
+
+</script>
+</body>
+</html>

@@ -100,10 +100,19 @@ export function diff(before: Plan, after: Plan): Change[] {
           const tb = cb.types.find((x) => x.name === ta.name);
           if (ta.kind !== "enum" || tb?.kind !== "enum") continue;
           const gone = ta.values.filter((v) => !tb.values.includes(v));
-          if (!gone.length) continue;
+          const added = tb.values.filter((v) => !ta.values.includes(v));
+          if (!gone.length && !added.length) continue;
+          // Added values only matter to storage when the column is a database
+          // enum. A plan types a free-text column as string, so a field that
+          // references the enum is taken to be one.
           for (const e of b.entities) for (const f of e.fields) {
-            if (typeLabel(f.type).replace(/[?\[\]]/g, "") === ta.name) {
+            if (typeLabel(f.type).replace(/[?\[\]]/g, "") !== ta.name) continue;
+            if (gone.length) {
               const short = `${f.name}: rows with ${gone.map((v) => `"${v}"`).join(", ")} must be mapped to a new ${ta.name}`;
+              push(mod, "migration", `${e.name}.${short}`, undefined, ids.entity(mod, e.name), short);
+            }
+            if (added.length) {
+              const short = `${f.name}: database enum gains ${added.map((v) => `"${v}"`).join(", ")}`;
               push(mod, "migration", `${e.name}.${short}`, undefined, ids.entity(mod, e.name), short);
             }
           }

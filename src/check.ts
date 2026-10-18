@@ -65,8 +65,11 @@ export function check(plan: Plan): Diagnostic[] {
     const scope = new Set<Module | null>([null, ...ancestors, m]);
 
     // --- 2. module split: dependencies only go through contracts
-    for (const u of m.uses) {
+    for (const [i, u] of m.uses.entries()) {
       const at = `${m.name} / uses ${u.contract}`;
+      if (m.uses.findIndex((x) => x.contract === u.contract) !== i) {
+        err(at, `${u.contract} is listed twice; use one entry (subscribe() already implies the dependency)`);
+      }
       const owner = ix.contractOwner.get(u.contract);
       if (!owner) { err(at, `no module provides contract "${u.contract}"`); continue; }
       if (owner === m) { err(at, "a module does not need to use its own contract"); continue; }
@@ -123,10 +126,25 @@ export function check(plan: Plan): Diagnostic[] {
       }
       for (const meth of r.methods) {
         if (meth.kind !== "find") continue;
-        const missing = meth.by.filter((f) => !local.fields.some((x) => x.name === f));
-        if (missing.length) { err(at, `findBy ${meth.by.join(",")}: no field ${missing.join(", ")}`); continue; }
-        if (!isIndexed(local, meth.by)) {
-          warn(at, `findBy ${meth.by.join(",")} has no supporting index on ${local.name}`);
+        // An aggregate root may be found through one of its members: findBy("Recipient.token").
+        const member = memberLookup(meth.by);
+        if (member === null) { err(at, `findBy ${meth.by.join(",")}: mixes fields of different tables`); continue; }
+        let target = local;
+        let by = meth.by;
+        if (member) {
+          const agg = m.aggregates.find((a) => a.root === r.entity);
+          const e = m.entities.find((x) => x.name === member);
+          if (!agg?.members.includes(member) || !e) {
+            err(at, `findBy ${meth.by.join(",")}: ${member} is not a member of an aggregate rooted at ${r.entity}`);
+            continue;
+          }
+          target = e;
+          by = meth.by.map((f) => f.slice(member.length + 1));
+        }
+        const missing = by.filter((f) => !target.fields.some((x) => x.name === f));
+        if (missing.length) { err(at, `findBy ${meth.by.join(",")}: no field ${missing.join(", ")} on ${target.name}`); continue; }
+        if (!isIndexed(target, by)) {
+          warn(at, `findBy ${meth.by.join(",")} has no supporting index on ${target.name}`);
         }
       }
     }
@@ -205,6 +223,13 @@ function resolveQualified(
 }
 
 // ---- helpers -------------------------------------------------------------------
+
+// "" when every field is the root's own, the member's name when every field is
+// "Member.field" of one member, null when they mix.
+function memberLookup(by: string[]): string | null {
+  const owners = new Set(by.map((f) => (f.includes(".") ? f.split(".")[0] : "")));
+  return owners.size === 1 ? [...owners][0] : null;
+}
 
 function isIndexed(e: Entity, by: string[]): boolean {
   const covers = (cols: string[]) => by.every((f, i) => cols[i] === f) || sameSet(cols, by);

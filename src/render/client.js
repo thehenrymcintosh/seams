@@ -277,6 +277,21 @@
       }
     }
   }
+  // Sources and notes stay one or two lines until clicked, so real code with
+  // long paths does not push a card's contracts off screen.
+  function srcLine(list) {
+    if (!list.length) return null;
+    if (list.length === 1) return h("p", { class: "src" }, list[0]);
+    return h("details", { class: "src", onclick: (ev) => ev.stopPropagation() },
+      h("summary", {}, `${list[0]} +${list.length - 1}`),
+      ...list.slice(1).map((x) => h("div", {}, x)));
+  }
+  function noteLine(text) {
+    if (!text) return null;
+    return h("p", { class: "note clamp", title: "Click to read all",
+      onclick: (ev) => { ev.stopPropagation(); ev.currentTarget.classList.toggle("clamp"); drawWires(); } }, text);
+  }
+
   const clamp = (v, m) => Math.max(-m, Math.min(m, v));
   function place(n) {
     n.el.style.left = `${n.x - n.w / 2}px`;
@@ -405,8 +420,8 @@
         h("div", { class: "title" }, h("span", { class: "name" }, m.name), m.depth === "stub" ? h("span", { class: "badge" }, "not mapped") : null, facts(m.id),
           close ? h("button", { class: "x", "aria-label": `Close ${m.name}`, onclick: (ev) => { ev.stopPropagation(); close(); } }, "×") : null),
         h("p", { class: "purpose" }, m.purpose),
-        m.sources.length ? h("p", { class: "src" }, m.sources.join(" · ")) : null,
-        m.note ? h("p", { class: "note" }, m.note) : null,
+        srcLine(m.sources),
+        noteLine(m.note),
         reactsTo(m),
         changeList(cs)),
       m.contracts.map((c) => contractRow(m, c, ctx)),
@@ -472,8 +487,8 @@
       rowHead(c.id, hex(), c.name, m.depth === "stub" ? "not mapped" : `${n} member${n === 1 ? "" : "s"}`, ctx),
       changeList(ctx.placed.get(c.id)),
       open ? h("div", { class: "row-body" },
-        c.note ? h("p", { class: "note" }, c.note) : null,
-        c.sources.length ? h("p", { class: "src" }, c.sources.join(" · ")) : null,
+        noteLine(c.note),
+        srcLine(c.sources),
         c.operations.map((o) => member(o.id, h("span", { class: `mode ${o.mode}` }, o.mode === "command" ? "cmd" : "query"),
           [h("span", { class: "mname" }, o.name), "(", fieldsInline(o.input), ")", " → ", o.output ? tokens(o.output) : h("span", { class: "muted" }, "void")],
           o.errors.length ? h("div", { class: "errs" }, "fails with ", o.errors.join(", ")) : null, ctx)),
@@ -515,8 +530,8 @@
       rowHead(e.id, cyl(), e.name, `${root ? "root · " : ""}${e.fields.length} fields`, ctx),
       changeList(ctx.placed.get(e.id)),
       open ? h("div", { class: "row-body" },
-        e.note ? h("p", { class: "note" }, e.note) : null,
-        e.sources.length ? h("p", { class: "src" }, e.sources.join(" · ")) : null,
+        noteLine(e.note),
+        srcLine(e.sources),
         h("div", { class: "fields" }, e.fields.map((f) =>
           h("div", {}, h("span", { class: "fname" }, f.name), ": ", tokens(f.type), f.key ? h("span", { class: "key" }, "key") : null))),
         e.indexes.length ? h("p", { class: "aux" }, "indexed on ", e.indexes.join("; ")) : null,

@@ -1,6 +1,6 @@
 # Planned change: shop v1 → shop v2
 
-5 breaking, 2 migration, 2 additive, 4 internal.
+5 breaking, 3 migration, 2 additive, 4 internal.
 
 ## Payments
 
@@ -15,6 +15,7 @@
 - `breaking` Orders: CancelOrder: can now fail with AlreadyPaid
 - `migration` Order: add column paymentId: uuid?
 - `migration` Order.status: rows with "Placed" must be mapped to a new OrderStatus
+- `migration` Order.status: database enum gains "AwaitingPayment", "Paid", "PaymentFailed"
 - `additive` Orders: new event OrderPaid
 - `internal` Order: new invariant: Status only moves forward: AwaitingPayment, then Paid or PaymentFailed.
 - `internal` now depends on Payments

@@ -6,6 +6,9 @@ import type {
   Primitive, RepoMethod, Repository, SourceRef, TypeDef, TypeExpr, Use,
 } from "./ast.ts";
 
+// Where a node lives in the code: src("packages/lib/server-only/recipient/", "setDocumentRecipients")
+export const src = (path: string, symbol?: string, line?: number): SourceRef => ({ path, symbol, line });
+
 const prim = (name: Primitive): TypeExpr => ({ kind: "prim", name });
 
 export const t = {
@@ -60,11 +63,13 @@ export const aggregate = (root: string, members: string[], invariants: string[] 
 export const entity = (
   name: string,
   shape: Record<string, TypeExpr>,
-  opts: { key?: string[]; indexes?: Index[]; doc?: string } = {},
+  opts: { key?: string[]; indexes?: Index[]; doc?: string; sources?: SourceRef[]; note?: string } = {},
 ): Entity => ({
   kind: "entity",
   name,
   doc: opts.doc,
+  sources: opts.sources,
+  note: opts.note,
   fields: fields(shape),
   key: opts.key ?? ["id"],
   indexes: opts.indexes ?? [],
@@ -84,10 +89,12 @@ export const findBy = (...by: string[]): RepoMethod => ({ kind: "find", by });
 
 export const contract = (
   name: string,
-  c: { types?: TypeDef[]; operations?: Operation[]; events?: EventDef[] },
+  c: { types?: TypeDef[]; operations?: Operation[]; events?: EventDef[]; sources?: SourceRef[]; note?: string },
 ): Contract => ({
   kind: "contract",
   name,
+  sources: c.sources,
+  note: c.note,
   types: c.types ?? [],
   operations: c.operations ?? [],
   events: c.events ?? [],
@@ -118,7 +125,9 @@ export const subscribe = (contractName: string, ...events: string[]): Use =>
 
 // A module the agent knows exists but has not mapped. Its contracts may be
 // named (so other modules can depend on them) without their contents.
-export const stub = (name: string, purpose: string, contracts: string[] = [], sources: SourceRef[] = []): Module => ({
+export const stub = (
+  name: string, purpose: string, contracts: string[] = [], sources: SourceRef[] = [], uses: (string | Use)[] = [],
+): Module => ({
   kind: "module",
   name,
   purpose,
@@ -128,6 +137,6 @@ export const stub = (name: string, purpose: string, contracts: string[] = [], so
   aggregates: [],
   repositories: [],
   provides: contracts.map((c) => contract(c, {})),
-  uses: [],
+  uses: uses.map((u) => (typeof u === "string" ? { contract: u, subscribes: [] } : u)),
   modules: [],
 });

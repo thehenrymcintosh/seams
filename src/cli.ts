@@ -1,9 +1,14 @@
 // plan CLI.
-//   node src/cli.ts render <doc.json|doc.html> [-o out.html] [--force]
+// A document is read from .json, from a rendered .html, or from a .ts file whose
+// default export is the document (the form the plan skill writes).
+//
+//   node src/cli.ts render <doc.ts|doc.json|doc.html> [-o out.html] [--force]
 //   node src/cli.ts read   <doc.html> [--outline] print the embedded document as JSON, or as the agent outline
 //   node src/cli.ts check  <doc.json|doc.html>    run the checker on both trees
 
 import { readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { check, type Diagnostic } from "./check.ts";
 import type { PlanDocument } from "./doc.ts";
 import { readDocument, renderDocument } from "./render/render.ts";
@@ -11,7 +16,8 @@ import { outline } from "./views/outline.ts";
 
 const [cmd, file, ...rest] = process.argv.slice(2);
 
-function load(path: string): PlanDocument {
+async function load(path: string): Promise<PlanDocument> {
+  if (path.endsWith(".ts")) return (await import(pathToFileURL(resolve(path)).href)).default as PlanDocument;
   const text = readFileSync(path, "utf8");
   return path.endsWith(".html") ? readDocument(text) : (JSON.parse(text) as PlanDocument);
 }
@@ -28,7 +34,7 @@ const print = (ds: Diagnostic[]) => ds.forEach((d) => console.error(`${d.level.p
 
 switch (cmd) {
   case "render": {
-    const doc = load(file);
+    const doc = await load(file);
     const ds = diagnostics(doc);
     print(ds);
     if (ds.some((d) => d.level === "error") && !rest.includes("--force")) {
@@ -36,16 +42,16 @@ switch (cmd) {
       process.exit(1);
     }
     const o = rest.indexOf("-o");
-    const out = o >= 0 ? rest[o + 1] : file.replace(/\.(json|html)$/, "") + ".html";
+    const out = o >= 0 ? rest[o + 1] : file.replace(/(\.plan)?\.(ts|json|html)$/, "") + ".plan.html";
     writeFileSync(out, renderDocument(doc));
     console.log(out);
     break;
   }
   case "read":
-    console.log(rest.includes("--outline") ? outline(load(file)) : JSON.stringify(load(file), null, 2));
+    console.log(rest.includes("--outline") ? outline(await load(file)) : JSON.stringify(await load(file), null, 2));
     break;
   case "check": {
-    const ds = diagnostics(load(file));
+    const ds = diagnostics(await load(file));
     print(ds);
     console.log(ds.length ? `${ds.length} finding(s)` : "clean");
     process.exit(ds.some((d) => d.level === "error") ? 1 : 0);
