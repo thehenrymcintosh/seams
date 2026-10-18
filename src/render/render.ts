@@ -2,7 +2,7 @@
 // network requests: styles, script and data are all inline.
 //
 // Three blocks are embedded:
-//   #plan-doc      the document itself, the source of truth, read back by `plan read`
+//   #plan-doc      the document itself, the source of truth, read back by `seams read`
 //   #plan-outline  the compact text an agent validates code against (views/outline.ts)
 //   #plan-view     derived for drawing, ignored on read-back
 
@@ -22,7 +22,7 @@ export function renderDocument(doc: PlanDocument): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="generator" content="plan-ast">
+<meta name="generator" content="seams">
 <title>${escapeHtml(doc.title)}</title>
 <style>
 ${asset("client.css")}

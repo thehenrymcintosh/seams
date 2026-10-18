@@ -12,6 +12,11 @@
 //   2. module split           -> the Module nodes themselves, plus `uses`
 //   3. contracts              -> provides (operations, events, DTO types),
 //                                and the endpoints that expose them
+//
+// Three more parts say how the module is built and run:
+//   4. wiring                 -> ports: what is injected from outside the domain
+//   5. observability          -> signals: logs, metrics, traces, audit records
+//   6. testing                -> tests: what is tested, at which level, with which fakes
 
 export type Plan = {
   kind: "plan";
@@ -43,6 +48,9 @@ export type Module = Located & {
   uses: Use[];
   stores: Store[];
   endpoints: Endpoint[];
+  ports: Port[];
+  signals: Signal[];
+  tests: TestCase[];
   // Sub-modules sit inside this module's boundary. Their contracts are
   // visible to their siblings and to this module, but not to anything
   // outside it: from outside, only this module's own contracts count.
@@ -139,6 +147,56 @@ export type Endpoint = Located & {
   calls: string[];               // "Contract.Operation", of a contract the module uses or provides
   auth: string;                  // "session", "api token", "recipient token", "public"
   audience: "public" | "app" | "internal";
+};
+
+// ---- 4. Wiring ----------------------------------------------------------------------
+//
+// Other modules reach this one through `uses`, which the composition root
+// injects as their Api. A port covers everything else the module needs from
+// outside the domain: a clock, a mailer, a PDF signer, a queue. The module owns
+// the interface; adapters implement it per environment.
+
+export type Port = Located & {
+  kind: "port";
+  name: string;                  // "Mailer"
+  purpose: string;
+  methods: string[];             // informal signatures: "send(to, template)"
+  adapters: Adapter[];
+  // false when the code imports the implementation directly (a singleton),
+  // so a test can't swap it without module mocking.
+  injected: boolean;
+};
+
+export type Adapter = { name: string; env: "prod" | "test" | "local"; note?: string };
+
+// ---- 5. Observability ---------------------------------------------------------------
+//
+// What the module emits so someone can tell it is working. `on` names what
+// emits it: an operation or event ("Signing.Delegate"), an endpoint name, or a
+// port name.
+
+export type Signal = Located & {
+  kind: "signal";
+  name: string;                  // "signing.delegated", "signing_delegations_total"
+  type: "log" | "metric" | "trace" | "audit";
+  on: string;
+  fields: string[];              // attributes, or labels for a metric
+  alert?: string;                // "p95 > 2s for 5m"
+};
+
+// ---- 6. Testing ---------------------------------------------------------------------
+//
+// The testing strategy as a list of tests worth having. `covers` names what a
+// test proves: an operation, an event, an endpoint name, or an aggregate (its
+// invariants). `fakes` names the ports and used contracts it replaces.
+
+export type TestCase = Located & {
+  kind: "test";
+  name: string;                  // "delegating twice is refused"
+  level: "unit" | "integration" | "contract" | "e2e";
+  covers: string[];
+  fakes: string[];
+  exists?: boolean;              // already in the repo; sources point at it
 };
 
 // ---- 3. Contracts between modules --------------------------------------------

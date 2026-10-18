@@ -1,5 +1,5 @@
 ---
-name: plan-doc
+name: seams
 description: Map a TypeScript codebase into a plan document (modules, data, contracts) for a change the user describes, or to explain how part of it works, and render it as one standalone HTML page.
 ---
 
@@ -7,11 +7,11 @@ description: Map a TypeScript codebase into a plan document (modules, data, cont
 
 A plan document is the reference for one planning or learning session. It holds the system's
 module boundaries, the data each module owns, and the contracts between them, as a tree you write
-in TypeScript with the plan-ast DSL. The CLI checks the tree and renders one HTML file that a
+in TypeScript with the seams DSL. The CLI checks the tree and renders one HTML file that a
 person reviews and that you read back on the next round.
 
-It needs the `plan` command (from the plan-ast repo, installed with `npm link`). If `plan where`
-fails, tell the user to install plan-ast first (see its README) and stop.
+It needs the `plan` command (from the seams repo, installed with `npm link`). If `seams where`
+fails, tell the user to install seams first (see its README) and stop.
 
 ## When to use it
 
@@ -38,6 +38,15 @@ The plan is a conceptual model, not a transcript of the code. Get these right an
 5. **Endpoints.** The routes and procedures near the change, with protocol, method, path, auth and
    the operations they call. An API layer that only routes is its own module that owns endpoints
    and no data.
+6. **Wiring.** The ports a mapped module needs from outside the domain (jobs, mailer, clock, file
+   store, PDF signer), their adapters per environment, and whether the code passes them in or
+   imports a singleton. Other modules are injected through `uses`; do not repeat them as ports.
+7. **Observability.** The signals near the change: audit records, logs, metrics, traces, each on
+   the operation, event, endpoint or port that emits it, with its fields. Model what exists, then
+   add what the change needs so someone can tell it works in production.
+8. **Testing strategy.** The tests that already cover the area (`exists: true`, with a source)
+   and the ones the change needs: one per new command and per new invariant, at the lowest level
+   that proves it, faking only ports and used contracts.
 
 Leave out function bodies, frameworks, infrastructure, UI, and any field or operation the intent
 does not touch. Three to six fields per table is usually right; keep the ones the change reads,
@@ -71,9 +80,9 @@ them directly. Say so in a note.
 
 ## Writing the document
 
-Start the file with `plan new <slug>` (or `plan new <slug> --learn`) in the user's working folder.
+Start the file with `seams new <slug>` (or `seams new <slug> --learn`) in the user's working folder.
 It writes `plans/<slug>.plan.ts` with the imports and every section in place. Its default export is
-a `PlanDocument`; the DSL helpers are documented in `$(plan where)/src/dsl.ts`.
+a `PlanDocument`; the DSL helpers are documented in `$(seams where)/src/dsl.ts`.
 
 Build the current modules once, then build the proposed
 tree by replacing only the modules that change (spread the current one and override), so
@@ -96,6 +105,14 @@ unchanged modules are written once.
 - Endpoints: `http("POST", "/api/v2/envelope/distribute", "Envelopes.Send", { auth: "api token" })` or
   `rpc("trpc", "recipient.rejectDocumentWithToken", "Signing.Reject", { auth: "recipient token" })`.
   List the ones near the change, not every route.
+- Ports: `port("Jobs", "Queues background work", ["triggerJob({ name, payload })"], { prod: "Inngest", local: "LocalJobProvider" }, { injected: false })`.
+  Set `injected: false` when the code imports the implementation directly.
+- Signals: `audit(name, on, fields)`, `log(...)`, `metric(...)`, `trace(...)`. `on` is `"Contract.Op"`,
+  `"Contract.Event"`, an endpoint name or a port. Never list a token, password or secret as a field.
+  Keep metric labels to a few values each (outcome, provider), never ids or emails.
+- Tests: `test("delegating twice is refused", "unit", ["Signing.Delegate", "Envelope"], { fakes: ["Jobs"] })`.
+  `covers` takes operations, events, endpoint names and aggregates (meaning their invariants).
+  If a test needs to fake a port the code imports directly, that is a question for the user.
 - `glossary`: the domain's own words a newcomer would trip on (eight to twelve), each with a
   one-sentence meaning and the node that embodies it. The page underlines them everywhere.
 - `facts`: deterministic evidence keyed by node id (counts, complexity, call sites). Say how each
@@ -104,9 +121,9 @@ unchanged modules are written once.
 ## Check, render, read back
 
 ```sh
-plan check  plans/<slug>.plan.ts
-plan render plans/<slug>.plan.ts          # writes plans/<slug>.plan.html
-plan read   plans/<slug>.plan.html --outline
+seams check  plans/<slug>.plan.ts
+seams render plans/<slug>.plan.ts          # writes plans/<slug>.plan.html
+seams read   plans/<slug>.plan.html --outline
 ```
 
 `render` refuses a plan with errors. Fix errors by changing the model, not by deleting the rule's

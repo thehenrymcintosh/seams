@@ -3,10 +3,14 @@ import type { Publish } from "../kernel.ts";
 import type * as Gateway from "./gateway/Gateway.contract.ts";
 import type * as Payments from "./Payments.contract.ts";
 import type { PaymentRepository } from "./repositories.ts";
+import type { Clock } from "./ports.ts";
+import type { Emit } from "./telemetry.ts";
 
 export type PaymentsDeps = {
   gateway: Gateway.GatewayApi;
   paymentRepository: PaymentRepository;
+  clock: Clock;
+  emit: Emit;
   publishPayments: Publish<Payments.PaymentsEvents>;
 };
 

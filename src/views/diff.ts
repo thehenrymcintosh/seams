@@ -113,6 +113,31 @@ export function diff(before: Plan, after: Plan): Change[] {
         if (ea.calls.join() !== eb.calls.join()) push(mod, "internal", `${eb.name}: now calls ${eb.calls.join(", ")}`, undefined, eid, `now calls ${eb.calls.join(", ")}`);
       }
 
+      // 4-6. wiring, signals, tests: nothing outside the module changes,
+      // except a dashboard or alert that reads a metric that goes away
+      const ps = match(a.ports ?? [], b.ports ?? []);
+      for (const p of ps.added) push(mod, "internal", `new port ${p.name}: ${p.purpose}`, undefined, ids.port(mod, p.name), "new port");
+      for (const p of ps.removed) push(mod, "internal", `port ${p.name} removed`);
+      for (const [pa, pb] of ps.both) {
+        const pid = ids.port(mod, pb.name);
+        for (const x of pb.adapters) if (!pa.adapters.some((y) => y.name === x.name)) push(mod, "internal", `${pb.name}: new ${x.env} adapter ${x.name}`, undefined, pid, `new ${x.env} adapter ${x.name}`);
+        if (!pa.injected && pb.injected) push(mod, "internal", `${pb.name}: now injected`, undefined, pid, "now injected");
+      }
+      const ss = match(a.signals ?? [], b.signals ?? []);
+      for (const x of ss.added) push(mod, "additive", `new ${x.type} ${x.name}`, undefined, ids.signal(mod, x.name), `new ${x.type}`);
+      for (const x of ss.removed) {
+        const read = x.type === "metric" || x.alert;
+        push(mod, read ? "breaking" : "internal", `${x.type} ${x.name} removed${read ? " (dashboards and alerts that read it break)" : ""}`);
+      }
+      for (const [xa, xb] of ss.both) {
+        const gone = xa.fields.filter((f) => !xb.fields.includes(f));
+        if (gone.length && xb.type === "metric") push(mod, "breaking", `${xb.name}: drops label ${gone.join(", ")}`, undefined, ids.signal(mod, xb.name), `drops label ${gone.join(", ")}`);
+        if (xa.alert !== xb.alert) push(mod, "internal", `${xb.name}: alert ${xb.alert ?? "removed"}`, undefined, ids.signal(mod, xb.name), `alert ${xb.alert ?? "removed"}`);
+      }
+      const ts = match(a.tests ?? [], b.tests ?? []);
+      for (const x of ts.added) push(mod, "internal", `new ${x.level} test: ${x.name}`, undefined, ids.test(mod, x.name), `new ${x.level} test`);
+      for (const x of ts.removed) push(mod, "internal", `${x.level} test removed: ${x.name}`);
+
       // 2. module split
       const ua = new Set(a.uses.map((u) => u.contract)), ub = new Set(b.uses.map((u) => u.contract));
       for (const u of b.uses) {

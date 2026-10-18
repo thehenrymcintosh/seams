@@ -7,6 +7,9 @@
 //   <module>/<store>.sql             relational stores: tables and indexes
 //   <module>/<store>.keys.ts         key-value stores: key builders per item type
 //   <module>/routes.ts               endpoints bound to the operations they call
+//   <module>/ports.ts                interfaces for what is injected from outside the domain
+//   <module>/telemetry.ts            the signals the module emits, and a typed emit
+//   <module>/<module>.test.ts        planned tests as todos
 //
 // Other modules may import only `*.contract.ts`. Because every cross-module
 // import is a `import type * as X from "../x/X.contract.ts"`, the boundary is
@@ -34,7 +37,7 @@ export type Publish<Events> = <K extends keyof Events>(name: K, payload: Events[
 const TSCONFIG = JSON.stringify({
   compilerOptions: {
     target: "ES2023", module: "nodenext", strict: true, noEmit: true,
-    allowImportingTsExtensions: true, verbatimModuleSyntax: true,
+    allowImportingTsExtensions: true, verbatimModuleSyntax: true, types: ["node"],
   },
   include: ["**/*.ts"],
 }, null, 2) + "\n";
@@ -59,6 +62,10 @@ export function skeleton(plan: Plan): Files {
       else files.set(`${dir}/${slug}.keys.ts`, keysFile(m, st));
     }
     if (m.endpoints.length) files.set(`${dir}/routes.ts`, routesFile(m, ix.contractOwner));
+    if (m.ports?.length) files.set(`${dir}/ports.ts`, portsFile(m));
+    if (m.signals?.length) files.set(`${dir}/telemetry.ts`, telemetryFile(m));
+    const planned = (m.tests ?? []).filter((x) => !x.exists);
+    if (planned.length) files.set(`${dir}/${m.name.toLowerCase()}.test.ts`, testsFile(m, planned));
   }
   return files;
 }
@@ -128,6 +135,39 @@ function routesFile(m: Module, owners: Map<string, Module>): string {
     `export function routes(api: { ${api} }) {`,
     "  return [", ...rows, "  ] as const;", "}", "",
   ].join("\n");
+}
+
+// One interface per port. Method signatures in a plan are informal, so they
+// become comments; the names are real.
+function portsFile(m: Module): string {
+  const body = m.ports.map((p) => {
+    const ad = p.adapters.map((a) => `${a.env} ${a.name}`).join(", ");
+    const doc = [p.purpose, ad && `Adapters: ${ad}.`, !p.injected && "Today the code imports this directly."].filter(Boolean).join(" ");
+    const meths = p.methods.map((x) => `  /** ${x} */\n  ${x.split("(")[0].trim()}(...args: unknown[]): Promise<unknown>;`);
+    return `/** ${doc} */\nexport interface ${p.name} {\n${meths.join("\n")}\n}`;
+  });
+  return header([], body);
+}
+
+// The module's signals as data, and an emit function typed by them, so a
+// signal with a missing or extra field does not compile.
+function telemetryFile(m: Module): string {
+  const rows = m.signals.map((x) =>
+    `  ${JSON.stringify(x.name)}: { type: "${x.type}", on: ${JSON.stringify(x.on)}, fields: [${x.fields.map((f) => JSON.stringify(f)).join(", ")}]${x.alert ? `, alert: ${JSON.stringify(x.alert)}` : ""} },`);
+  return header([], [
+    `export const signals = {\n${rows.join("\n")}\n} as const;`,
+    "type Signals = typeof signals;",
+    "export type Emit = <K extends keyof Signals>(name: K, fields: Record<Signals[K][\"fields\"][number], unknown>) => void;",
+  ]);
+}
+
+// Planned tests, as todos the test runner lists until someone writes them.
+function testsFile(m: Module, tests: Module["tests"]): string {
+  const body = tests.map((x) => {
+    const how = [x.level, `covers ${x.covers.join(", ")}`, x.fakes.length && `fakes ${x.fakes.join(", ")}`].filter(Boolean).join("; ");
+    return `test(${JSON.stringify(x.name)}, { todo: ${JSON.stringify(how)} }, () => {});`;
+  });
+  return header([`import { test } from "node:test";`], [body.join("\n")], "Generated once from the plan: the tests it calls for.");
 }
 
 let dirs = new Map<Module, string>();
@@ -259,6 +299,9 @@ function indexFile(m: Module, parent: Scope): string {
   const depLines: string[] = [];
   for (const u of m.uses) { s.needed.add(u.contract); depLines.push(`  ${lowerFirst(u.contract)}: ${u.contract}.${u.contract}Api;`); }
   for (const r of m.repositories) depLines.push(`  ${lowerFirst(r.name)}: ${r.name};`);
+  const ports = (m.ports ?? []).filter((p) => p.injected);
+  for (const p of ports) depLines.push(`  ${lowerFirst(p.name)}: ${p.name};`);
+  if (m.signals?.length) depLines.push("  emit: Emit;");
   for (const c of m.provides) {
     s.needed.add(c.name);
     if (c.events.length) depLines.push(`  publish${c.name}: Publish<${c.name}.${c.name}Events>;`);
@@ -297,6 +340,8 @@ function indexFile(m: Module, parent: Scope): string {
 
   const kernel = m.provides.some((c) => c.events.length) ? [`import type { Publish } from "${kernelFrom(dirOf(m))}";`] : [];
   const repos = m.repositories.length ? [`import type { ${m.repositories.map((r) => r.name).join(", ")} } from "./repositories.ts";`] : [];
+  if (ports.length) repos.push(`import type { ${ports.map((p) => p.name).join(", ")} } from "./ports.ts";`);
+  if (m.signals?.length) repos.push(`import type { Emit } from "./telemetry.ts";`);
   return header([...kernel, ...s.imports(dirOf(m)), ...repos], body,
     "Generated once from the plan as a starting point. Implement the module here.");
 }

@@ -35,7 +35,23 @@ export type ModuleView = {
   entities: EntityView[];
   stores: StoreView[];
   endpoints: EndpointView[];
+  ports: PortView[];
+  signals: SignalView[];
+  tests: TestView[];
   modules: ModuleView[];           // sub-modules, drawn inside this card
+};
+
+export type Link = { label: string; ref?: string };
+
+export type PortView = {
+  id: string; name: string; purpose: string; methods: string[]; injected: boolean;
+  adapters: { name: string; env: string }[]; note?: string; sources: string[];
+};
+export type SignalView = {
+  id: string; name: string; type: string; on: Link; fields: string[]; alert?: string; note?: string; sources: string[];
+};
+export type TestView = {
+  id: string; name: string; level: string; covers: Link[]; fakes: Link[]; exists: boolean; note?: string; sources: string[];
 };
 
 export type StoreView = { id: string; name: string; engine: string; note?: string; sources: string[]; tables: TableView[] };
@@ -165,8 +181,32 @@ function treeView(plan: Plan): TreeView {
           return { label: c, ref: o ? ids.operation(o, cn, op) : undefined };
         }),
       })),
+      ports: (m.ports ?? []).map((pt) => ({
+        id: ids.port(path, pt.name), name: pt.name, purpose: pt.purpose, methods: pt.methods, injected: pt.injected,
+        adapters: pt.adapters, note: pt.note, sources: sources(pt.sources),
+      })),
+      signals: (m.signals ?? []).map((sg) => ({
+        id: ids.signal(path, sg.name), name: sg.name, type: sg.type, on: link(sg.on), fields: sg.fields, alert: sg.alert,
+        note: sg.note, sources: sources(sg.sources),
+      })),
+      tests: (m.tests ?? []).map((tc) => ({
+        id: ids.test(path, tc.name), name: tc.name, level: tc.level, covers: tc.covers.map(link), fakes: tc.fakes.map(link),
+        exists: !!tc.exists, note: tc.note, sources: sources(tc.sources),
+      })),
       modules: m.modules.map((sub) => moduleView(sub, `${path}/${sub.name}`)),
     };
+    // What a signal or test names: an operation or event, an endpoint, a port,
+    // an aggregate, or a contract the module uses.
+    function link(label: string): Link {
+      const [cn, x] = label.split(".");
+      const o = owner.get(cn);
+      if (o && x) return { label, ref: ids.operation(o, cn, x) };
+      if (o) return { label, ref: ids.contract(o, cn) };
+      if (m.endpoints.some((e) => e.name === label)) return { label, ref: ids.endpoint(path, label) };
+      if (m.ports?.some((p) => p.name === label)) return { label, ref: ids.port(path, label) };
+      if (m.aggregates.some((a) => a.name === label)) return { label, ref: ids.aggregate(path, label) };
+      return { label };
+    }
   };
   const modules = plan.modules.map((m) => moduleView(m, m.name));
 

@@ -14,4 +14,7 @@ export const ids = {
   // Paths hold slashes, which separate id segments, so they are written with
   // the look-alike "∕" (U+2215).
   endpoint: (m: string, name: string) => `${m}/endpoint/${name.replace(/\//g, "\u2215")}`,
+  port: (m: string, p: string) => `${m}/port/${p}`,
+  signal: (m: string, s: string) => `${m}/signal/${s.replace(/\//g, "\u2215")}`,
+  test: (m: string, t: string) => `${m}/test/${t.replace(/\//g, "\u2215")}`,
 };

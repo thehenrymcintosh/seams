@@ -3,7 +3,7 @@
 
 import type {
   Aggregate, Binding, Contract, Endpoint, Engine, Entity, EventDef, Field, Index, Module, Operation, PhysicalIndex, Plan,
-  Primitive, RepoMethod, Repository, SourceRef, Store, TypeDef, TypeExpr, Use,
+  Port, Primitive, RepoMethod, Repository, Signal, SourceRef, Store, TestCase, TypeDef, TypeExpr, Use,
 } from "./ast.ts";
 
 // Where a node lives in the code: src("packages/lib/server-only/recipient/", "setDocumentRecipients")
@@ -41,6 +41,9 @@ export const module = (
     modules?: Module[];
     stores?: Store[];
     endpoints?: Endpoint[];
+    ports?: Port[];
+    signals?: Signal[];
+    tests?: TestCase[];
     sources?: SourceRef[];
     note?: string;
   },
@@ -58,6 +61,9 @@ export const module = (
   uses: (m.uses ?? []).map((u) => (typeof u === "string" ? { contract: u, subscribes: [] } : u)),
   stores: m.stores ?? [],
   endpoints: m.endpoints ?? [],
+  ports: m.ports ?? [],
+  signals: m.signals ?? [],
+  tests: m.tests ?? [],
   modules: m.modules ?? [],
 });
 
@@ -144,6 +150,9 @@ export const stub = (
   uses: uses.map((u) => (typeof u === "string" ? { contract: u, subscribes: [] } : u)),
   stores: [],
   endpoints: [],
+  ports: [],
+  signals: [],
+  tests: [],
   modules: [],
 });
 
@@ -175,4 +184,36 @@ export const rpc = (
 ): Endpoint => ({
   kind: "endpoint", protocol, path, name: o.name ?? path,
   calls: typeof calls === "string" ? [calls] : calls, auth: o.auth, audience: o.audience ?? "app", sources: o.sources, note: o.note,
+});
+
+// ---- wiring ----
+// port("Mailer", "Sends transactional email", ["send(to, template, data)"], { prod: "ResendMailer", test: "InMemoryMailer" })
+type Located = { sources?: SourceRef[]; note?: string };
+type Adapters = Partial<Record<"prod" | "test" | "local", string | string[]>>;
+export const port = (
+  name: string, purpose: string, methods: string[], adapters: Adapters, o: Located & { injected?: boolean } = {},
+): Port => ({
+  kind: "port", name, purpose, methods, injected: o.injected ?? true, sources: o.sources, note: o.note,
+  adapters: (["prod", "local", "test"] as const).flatMap((env) => [adapters[env] ?? []].flat().map((n) => ({ name: n, env }))),
+});
+
+// ---- observability ----
+// metric("signing_delegations_total", "Signing.Delegate", ["outcome"], { alert: "errors > 5% for 10m" })
+const sig = (type: Signal["type"]) =>
+  (name: string, on: string, fieldNames: string[] = [], o: Located & { alert?: string } = {}): Signal =>
+    ({ kind: "signal", type, name, on, fields: fieldNames, ...o });
+
+export const log = sig("log");
+export const metric = sig("metric");
+export const trace = sig("trace");
+export const audit = sig("audit");
+
+// ---- testing ----
+// test("delegating twice is refused", "unit", ["Signing.Delegate"], { fakes: ["Mailer"] })
+export const test = (
+  name: string, level: TestCase["level"], covers: string | string[],
+  o: Located & { fakes?: string[]; exists?: boolean } = {},
+): TestCase => ({
+  kind: "test", name, level, covers: typeof covers === "string" ? [covers] : covers,
+  fakes: o.fakes ?? [], exists: o.exists, sources: o.sources, note: o.note,
 });

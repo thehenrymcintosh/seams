@@ -4,11 +4,13 @@ import type * as Catalog from "../catalog/Catalog.contract.ts";
 import type * as Orders from "./Orders.contract.ts";
 import type * as Payments from "../payments/Payments.contract.ts";
 import type { OrderRepository } from "./repositories.ts";
+import type { Emit } from "./telemetry.ts";
 
 export type OrdersDeps = {
   catalog: Catalog.CatalogApi;
   payments: Payments.PaymentsApi;
   orderRepository: OrderRepository;
+  emit: Emit;
   publishOrders: Publish<Orders.OrdersEvents>;
 };
 

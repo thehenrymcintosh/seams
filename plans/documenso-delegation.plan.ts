@@ -1,11 +1,11 @@
-// Mapped from documenso/documenso @ 8724500 with the plan-doc skill.
+// Mapped from documenso/documenso @ 8724500 with the seams skill.
 // Intent: let a signer hand their signing over to someone else.
 
 import type { Module } from "../src/ast.ts";
 import type { PlanDocument } from "../src/doc.ts";
 import {
-  aggregate, command, contract, entity, enumOf, event, findBy, get, http, idx, module, plan, query, record, repo, rpc, save,
-  src, store, stub, subscribe, t, table, uniqueIdx,
+  aggregate, audit, command, contract, entity, enumOf, event, findBy, get, http, idx, log, module, plan, port, query, record,
+  repo, rpc, save, src, store, stub, subscribe, t, table, test, uniqueIdx,
 } from "../src/dsl.ts";
 
 const lib = "packages/lib/server-only";
@@ -156,6 +156,17 @@ const signingContract = (extra: { ops?: ReturnType<typeof command>[]; types?: Re
 const envelopesSources = [src("packages/prisma/schema.prisma", "Envelope"), src(`${lib}/envelope/`), src(`${lib}/document/`), src(`${lib}/recipient/`), src(`${lib}/field/`)];
 const envelopesNote = "In code, document functions enqueue email jobs by name (jobs.triggerJob('send.signing.requested.email'), 22 files) and call triggerWebhook directly (17 files). The plan models both as events.";
 
+// Every flow enqueues its side effects through one jobs client, imported as a
+// module singleton. Tests can only replace it with vi.mock.
+const jobsPort = port("Jobs", "Queues background work: emails, webhook calls, sealing.", ["triggerJob({ name, payload })"],
+  { prod: ["Inngest", "BullMQ"], local: "LocalJobProvider" },
+  { injected: false, sources: [src("packages/lib/jobs/client.ts", "jobsClient", 43)],
+    note: "The provider is picked by NEXT_PRIVATE_JOBS_PROVIDER. 21 files under server-only import `jobs` directly." });
+const rejectAudit = audit("recipient rejected", "Signing.Reject", ["envelopeId", "recipientId", "reason", "ipAddress", "userAgent"],
+  { sources: [src(`${lib}/document/reject-document-with-token.ts`, "createDocumentAuditLogData", 78)], note: "Written as a DocumentAuditLog row in the same transaction. Feeds the signing certificate." });
+const rejectE2e = test("no step is activated past a rejected recipient", "e2e", "Signing.Reject",
+  { exists: true, sources: [src("packages/app-tests/e2e/recipient/rejected-recipient-advancement.spec.ts", undefined, 37)] });
+
 const envelopesV1 = module("Envelopes", {
   purpose: "A document or template being prepared, sent and signed: its recipients, their fields and signatures, and the rules for who acts when.",
   sources: envelopesSources,
@@ -170,6 +181,9 @@ const envelopesV1 = module("Envelopes", {
   stores: [mainDb()],
   modules: [signingOrder, auditTrail, sealing],
   uses: ["SigningOrder", "AuditTrail", "Sealing", "Accounts"],
+  ports: [jobsPort],
+  signals: [rejectAudit],
+  tests: [rejectE2e],
   provides: [
     envelopeContract({
       status: ["NOT_SIGNED", "SIGNED", "REJECTED"],
@@ -188,6 +202,9 @@ const emailsV1 = module("Emails", {
   sources: [src("packages/lib/jobs/definitions/emails/"), src("packages/email/templates/")],
   note: "Each email is a background job whose handler reads the envelope through Prisma itself. Conceptually it reads through GetEnvelope.",
   uses: [subscribe("Envelopes", "SigningRequested", "RecipientCompleted", "RecipientRejected", "EnvelopeCompleted")],
+  ports: [port("Mailer", "Sends one rendered email.", ["sendMail({ to, from, subject, html, text })"],
+    { prod: ["SMTP", "Resend", "MailChannels"], local: "SMTP on 127.0.0.1:2500" },
+    { injected: false, sources: [src("packages/email/mailer.ts", "mailer", 108)], note: "Chosen by NEXT_PRIVATE_SMTP_TRANSPORT and imported directly in 11 files." })],
 });
 
 const webhookEvents = ["DOCUMENT_SENT", "DOCUMENT_OPENED", "DOCUMENT_SIGNED", "DOCUMENT_RECIPIENT_COMPLETED", "DOCUMENT_COMPLETED", "DOCUMENT_REJECTED", "DOCUMENT_CANCELLED", "RECIPIENT_EXPIRED"];
@@ -247,6 +264,13 @@ const apiModule = (endpoints = apiEndpoints) => module("Api", {
   note: "Rate limits and CSRF are applied per prefix in apps/remix/server/router.ts. Only the endpoints near the change are listed.",
   uses: ["Envelopes", "Signing", "Webhooks", "Accounts"],
   endpoints,
+  signals: endpoints.filter((e) => e.path.startsWith("recipient.")).map((e) =>
+    log(`${e.path} called`, e.name, ["requestId", "ipAddress", "userAgent", "documentId"],
+      { sources: [src("packages/trpc/server/context.ts", "trpcLogger", 35)], note: "pino, through the per-request child logger. Never log the token or the input body." })),
+  tests: endpoints.some((e) => e.path === "recipient.delegateDocumentWithToken")
+    ? [test("a delegate gets the signing request and can sign", "e2e", "recipient.delegateDocumentWithToken",
+      { note: "Playwright, next to rejected-recipient-advancement.spec.ts." })]
+    : [],
 });
 
 // --- The change: delegation ------------------------------------------------------
@@ -273,6 +297,17 @@ const envelopesV2: Module = module("Envelopes", {
   stores: [mainDb()],
   modules: [signingOrder, auditTrail, sealing],
   uses: envelopesV1.uses.map((u) => u.contract),
+  ports: [jobsPort],
+  signals: [rejectAudit, audit("recipient delegated", "Signing.Delegate", ["envelopeId", "fromRecipientId", "toRecipientId", "reason", "ipAddress", "userAgent"],
+    { note: "A new DocumentAuditLog type, DOCUMENT_RECIPIENT_DELEGATED. The certificate should show who handed over to whom." })],
+  tests: [
+    rejectE2e,
+    test("only a pending signer or approver can delegate, and only when allowed", "unit", ["Signing.Delegate", "Envelope"], { fakes: ["Jobs"] }),
+    test("delegating moves unfilled fields and the old token stops working", "unit", ["Signing.Delegate", "Envelope"], { fakes: ["Jobs"] }),
+    test("the delegate takes the original's place in the signing order", "unit", ["Signing.Delegate", "SigningOrder.NextPendingRecipients"], { fakes: ["Jobs"] }),
+    test("delegating writes one audit entry and emits RecipientDelegated", "integration", ["Signing.Delegate", "Envelopes.RecipientDelegated"],
+      { fakes: ["Jobs"], note: "Against a real database, like the other Prisma tests." }),
+  ],
   provides: [
     envelopeContract({
       status: ["NOT_SIGNED", "SIGNED", "REJECTED", "DELEGATED"],
@@ -342,6 +377,11 @@ const doc: PlanDocument = {
       text: "Should delegation default to on for teams that already allow dictating the next signer?",
       node: "Envelopes/entity/DocumentMeta",
       options: ["Off for everyone", "Follow allowDictateNextSigner"],
+    },
+    {
+      text: "The delegation unit tests need to replace the jobs client. Pass it in, or mock the import like today?",
+      node: "Envelopes/port/Jobs",
+      options: ["Pass Jobs in to the new delegate function only", "vi.mock the jobs import in these tests", "Inject it everywhere (a separate change)"],
     },
   ],
   decisions: [

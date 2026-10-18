@@ -204,6 +204,9 @@
         }
       ],
       "endpoints": [],
+      "ports": [],
+      "signals": [],
+      "tests": [],
       "modules": []
     },
     {
@@ -650,6 +653,9 @@
           "audience": "public"
         }
       ],
+      "ports": [],
+      "signals": [],
+      "tests": [],
       "modules": []
     }
   ]

@@ -64,6 +64,7 @@
       for (const a of m.aggregates) out.add(a.id);
       for (const st of m.stores) { out.add(st.id); for (const tb of st.tables) out.add(tb.id); }
       for (const ep of m.endpoints) out.add(ep.id);
+      for (const x of [...m.ports, ...m.signals, ...m.tests]) out.add(x.id);
     }
     return out;
   }
@@ -444,7 +445,8 @@
 
   // A card is read top to bottom in the order a request travels: how you get
   // in (endpoints), what it promises (contracts), what it keeps (data), where
-  // that lives (storage), and what is inside it (sub-modules).
+  // that lives (storage), then how it is built and run (wiring, signals,
+  // tests), and what is inside it (sub-modules).
   function moduleCard(m, ctx, close) {
     const cs = ctx.placed.get(m.id);
     const all = state.tab === "change" ? allChangesIn(m.id, ctx) : [];
@@ -473,6 +475,9 @@
       group("contracts", "Contracts", m.contracts.length, m.contracts.map((c) => contractRow(m, c, ctx))),
       group("data", "Data", m.entities.length, m.aggregates.map((a) => aggregateBox(m, a, ctx)), loose.map((e) => entityRow(e, ctx))),
       group("storage", "Storage", m.stores.reduce((n, st) => n + st.tables.length, 0), m.stores.map((st) => storeBox(st, ctx))),
+      group("wiring", "Wiring", m.ports.length, m.ports.map((pt) => portRow(m, pt, ctx))),
+      group("signals", "Signals", m.signals.length, m.signals.map((sg) => signalRow(sg, ctx))),
+      group("tests", "Tests", m.tests.length, testSummary(m), m.tests.map((tc) => testRow(tc, ctx))),
       group("inside", "Inside", m.modules.length, m.modules.map((sub) => subModule(sub, ctx))));
   }
 
@@ -547,7 +552,7 @@
         srcLine(c.sources),
         c.operations.map((o) => member(o.id, h("span", { class: `mode ${o.mode}` }, o.mode === "command" ? "cmd" : "query"),
           [h("span", { class: "mname" }, o.name), "(", fieldsInline(o.input), ")", h("span", { class: "arrow" }, " → "), o.output ? tokens(o.output) : h("span", { class: "muted" }, "void")],
-          [o.errors.length ? h("div", { class: "errs" }, o.errors.map((e) => h("span", { class: "err" }, e))) : null, callers(o.id)], ctx)),
+          [o.errors.length ? h("div", { class: "errs" }, o.errors.map((e) => h("span", { class: "err" }, e))) : null, callers(o.id), testedBy(m, o.id, o.mode)], ctx)),
         c.events.map((e) => member(e.id, h("span", { class: "mode event" }, "event"),
           [h("span", { class: "mname" }, e.name), " { ", fieldsInline(e.payload), " }"], null, ctx)),
         typeShelf(c, ctx)) : null);
@@ -648,6 +653,85 @@
   // Path parameters stand out from the fixed parts.
   const pathTokens = (p) => p.split(/(\{[^}]+\}|:\w+)/).filter(Boolean).map((x) =>
     /^(\{|:)/.test(x) ? h("span", { class: "param" }, x) : x.split(/(?<=[/.])/).map((part, i) => [i ? h("wbr", {}) : null, part]));
+
+  // ---- wiring, signals, tests ---------------------------------------------------
+  const linkChip = (l, cls_ = "run-chip") => l.ref
+    ? h("button", { class: cls_, onclick: (ev) => { ev.stopPropagation(); reveal(l.ref); }, onmouseenter: () => hover(l.ref), onmouseleave: () => hover(null) }, l.label)
+    : h("span", { class: cls_ }, l.label);
+  const ENVS = ["prod", "local", "test"];
+
+  // A port: what the module needs from outside, and what plugs into it where.
+  function portRow(m, pt, ctx) {
+    const open = state.open.has(pt.id);
+    const fakedBy = m.tests.filter((tc) => tc.fakes.some((f) => f.ref === pt.id));
+    return h("section", { class: rowClass(pt.id, ctx, open, "port"), "data-node-id": pt.id },
+      rowHead(pt.id, plug(), pt.name, [
+        pt.injected ? null : h("span", { class: "warn-pill", title: "Imported directly, so tests can't swap it" }, "hard-wired"),
+        ENVS.filter((env) => pt.adapters.some((a) => a.env === env)).map((env) =>
+          h("span", { class: `env env-${env}`, title: pt.adapters.filter((a) => a.env === env).map((a) => a.name).join(", ") }, env)),
+      ], ctx),
+      changeList(ctx.placed.get(pt.id)),
+      open ? h("div", { class: "row-body" },
+        h("p", { class: "purpose-line" }, terms(pt.purpose)),
+        pt.methods.length ? h("div", { class: "fields" }, pt.methods.map((x) => h("div", { class: "mono" }, x))) : null,
+        h("div", { class: "adapters" }, ENVS.flatMap((env) => pt.adapters.filter((a) => a.env === env).map((a) =>
+          h("div", {}, h("span", { class: `env env-${env}` }, env), " ", h("span", { class: "mono" }, a.name))))),
+        fakedBy.length ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "faked in "), fakedBy.map((tc) => linkChip({ label: tc.name, ref: tc.id }, "run-chip prose"))) : null,
+        noteLine(pt.note), srcLine(pt.sources)) : null);
+  }
+
+  const SIGNAL_ICON = { log: "≡", metric: "▲", trace: "⇢", audit: "✎" };
+  function signalRow(sg, ctx) {
+    const open = state.open.has(sg.id);
+    return h("section", { class: rowClass(sg.id, ctx, open, "signal"), "data-node-id": sg.id },
+      rowHead(sg.id, h("span", { class: `sig-type st-${sg.type}`, title: sg.type }, sg.type), h("span", { class: "mono" }, sg.name),
+        [sg.alert ? h("span", { class: "alert", title: `Alert: ${sg.alert}` }, bell()) : null], ctx),
+      changeList(ctx.placed.get(sg.id)),
+      open ? h("div", { class: "row-body" },
+        h("p", { class: "aux" }, h("span", { class: "aux-label" }, "on "), linkChip(sg.on)),
+        sg.fields.length ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, sg.type === "metric" ? "labels " : "fields "),
+          sg.fields.map((f) => h("span", { class: "pill mono" }, f))) : null,
+        sg.alert ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "alert "), sg.alert) : null,
+        noteLine(sg.note), srcLine(sg.sources)) : null);
+  }
+
+  // Counts per level first, so the shape of the strategy reads at a glance.
+  const LEVELS = ["unit", "integration", "contract", "e2e"];
+  function testSummary(m) {
+    if (!m.tests.length) return null;
+    const planned = m.tests.filter((tc) => !tc.exists).length;
+    return h("div", { class: "test-summary" },
+      LEVELS.map((l) => [l, m.tests.filter((tc) => tc.level === l).length]).filter(([, n]) => n).map(([l, n]) =>
+        h("span", { class: `lvl lvl-${l}` }, `${n} ${l}`)),
+      planned ? h("span", { class: "muted" }, `${planned} to write`) : null);
+  }
+
+  function testRow(tc, ctx) {
+    const open = state.open.has(tc.id);
+    return h("section", { class: rowClass(tc.id, ctx, open, "test"), "data-node-id": tc.id },
+      rowHead(tc.id, h("span", { class: cls("tstate", tc.exists ? "exists" : "planned"), title: tc.exists ? "already in the repo" : "to write" }, tc.exists ? "✓" : "○"),
+        tc.name, h("span", { class: `lvl lvl-${tc.level}` }, tc.level), ctx, "test-meta"),
+      changeList(ctx.placed.get(tc.id)),
+      open ? h("div", { class: "row-body" },
+        h("p", { class: "aux" }, h("span", { class: "aux-label" }, "proves "), tc.covers.map((c) => linkChip(c))),
+        tc.fakes.length ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "fakes "), tc.fakes.map((c) => linkChip(c))) : null,
+        noteLine(tc.note), srcLine(tc.sources)) : null);
+  }
+
+  // Under an operation: which tests prove it. A command nothing tests says so,
+  // once the module has a testing strategy at all.
+  function testedBy(m, opId, mode) {
+    if (!m.tests.length) return null;
+    const ts = m.tests.filter((tc) => tc.covers.some((c) => c.ref === opId));
+    if (!ts.length) return mode === "command" ? h("div", { class: "callers" }, h("span", { class: "untested" }, "no test yet")) : null;
+    return h("div", { class: "callers" }, h("span", { class: "muted" }, "tested by "), ts.map((tc) =>
+      h("button", { class: "run-chip prose", onclick: (ev) => { ev.stopPropagation(); reveal(tc.id); } }, tc.name)));
+  }
+
+  const plug = () => s("svg", { class: "icon", viewBox: "0 0 16 16", width: 14, height: 14, "aria-hidden": "true" },
+    s("path", { d: "M5.5,1.5 v3.5 M10.5,1.5 v3.5 M3.5,5 h9 v3 a4.5,4.5 0 0 1 -9,0 z M8,12.5 v2.5" }));
+  const bell = () => s("svg", { class: "icon bell", viewBox: "0 0 16 16", width: 12, height: 12, "aria-hidden": "true" },
+    s("path", { d: "M4,11 v-4 a4,4 0 0 1 8,0 v4 l1.5,1.5 h-11 z M6.5,14 a1.5,1.5 0 0 0 3,0" }));
 
   // ---- storage ------------------------------------------------------------------
   const ENGINES = { postgres: "PostgreSQL", mysql: "MySQL", sqlite: "SQLite", dynamodb: "DynamoDB", redis: "Redis", s3: "S3", other: "Store" };
@@ -996,6 +1080,9 @@
       }
       for (const e of m.entities) out.push({ id: e.id, label: e.name, kind: "data", hint: m.name });
       for (const st of m.stores) for (const tb of st.tables) out.push({ id: tb.id, label: tb.table, kind: "storage", hint: `${ENGINES[st.engine] || st.engine} · ${st.name}` });
+      for (const pt of m.ports) out.push({ id: pt.id, label: pt.name, kind: "port", hint: pt.purpose });
+      for (const sg of m.signals) out.push({ id: sg.id, label: sg.name, kind: "signal", hint: `${sg.type} on ${sg.on.label}` });
+      for (const tc of m.tests) out.push({ id: tc.id, label: tc.name, kind: "test", hint: `${tc.level} test` });
     }
     for (const g of GLOSSARY) out.push({ id: g.node, label: g.term, kind: "word", hint: g.meaning });
     return out;

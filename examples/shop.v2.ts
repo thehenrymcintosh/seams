@@ -2,8 +2,8 @@
 // through a new Payments module. Diff this against v1 to review the change.
 
 import {
-  aggregate, command, contract, entity, enumOf, event, findBy, get, http, module, plan, query, record, repo, save, store,
-  subscribe, t, table,
+  aggregate, command, contract, entity, enumOf, event, findBy, get, http, log, metric, module, plan, port, query, record,
+  repo, save, store, subscribe, t, table, test, trace,
 } from "../src/dsl.ts";
 import { catalog, orderEndpoints, ordersStore } from "./shop.v1.ts";
 
@@ -30,6 +30,17 @@ export const payments = module("Payments", {
     }),
   ],
   uses: ["Gateway"],
+  ports: [port("Clock", "The current time, so tests can pin it.", ["now()"], { prod: "SystemClock", test: "FixedClock" })],
+  signals: [
+    metric("payments_total", "Payments.StartPayment", ["outcome"], { alert: "Failed > 10% for 15m" }),
+    trace("payments.charge", "Gateway.Charge", ["provider", "amount"]),
+    log("payments.failed", "Payments.PaymentFailed", ["orderId", "reason"]),
+  ],
+  tests: [
+    test("a second payment for the same order is refused", "unit", "Payments.StartPayment", { fakes: ["Gateway", "Clock"] }),
+    test("a decline publishes PaymentFailed", "unit", ["Payments.StartPayment", "Payments.PaymentFailed"], { fakes: ["Gateway", "Clock"] }),
+    test("payments are found by order through byOrder", "integration", "Payments.GetStatus", { note: "Runs against DynamoDB Local." }),
+  ],
   provides: [
     contract("Payments", {
       types: [enumOf("PaymentStatus", ["Pending", "Captured", "Failed"])],
@@ -84,6 +95,16 @@ export const orders = module("Orders", {
   uses: ["Catalog", subscribe("Payments", "PaymentCaptured", "PaymentFailed")],
   stores: [ordersStore()],
   endpoints: [...orderEndpoints, http("GET", "/orders/{id}/payment", "Payments.GetStatus", { auth: "customer session" })],
+  signals: [
+    metric("orders_placed_total", "Orders.PlaceOrder", ["outcome"]),
+    log("orders.payment_failed", "Payments.PaymentFailed", ["orderId", "reason"]),
+  ],
+  tests: [
+    test("placing an order totals its lines", "unit", ["Orders.PlaceOrder", "Order"], { fakes: ["Catalog"], exists: true }),
+    test("a captured payment marks the order paid", "unit", ["Payments.PaymentCaptured", "Order"], { fakes: ["Payments"] }),
+    test("a paid order can't be cancelled", "unit", "Orders.CancelOrder"),
+    test("checkout end to end", "e2e", ["POST /orders", "GET /orders/{id}/payment"]),
+  ],
 });
 
 export default plan("shop v2", [catalog, orders, payments]);

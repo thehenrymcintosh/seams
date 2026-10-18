@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// plan CLI.
+// The seams CLI.
 // A document is read from .json, from a rendered .html, or from a .ts file whose
 // default export is the document (the form the plan skill writes).
 //
-//   plan new    <slug> [--learn]                 start plans/<slug>.plan.ts from a template
-//   plan where                                   print the folder plan-ast is installed in
+//   seams new    <slug> [--learn]                 start plans/<slug>.plan.ts from a template
+//   seams where                                  print the folder seams is installed in
 //   node src/cli.ts render <doc.ts|doc.json|doc.html> [-o out.html] [--force]
 //   node src/cli.ts read   <doc.html> [--outline] print the embedded document as JSON, or as the agent outline
 //   node src/cli.ts check  <doc.json|doc.html>    run the checker on both trees
@@ -73,7 +73,7 @@ switch (cmd) {
     console.log(ROOT);
     break;
   case "new": {
-    if (!file) { console.error("usage: plan new <slug> [--learn]"); process.exit(2); }
+    if (!file) { console.error("usage: seams new <slug> [--learn]"); process.exit(2); }
     const out = resolve("plans", `${file}.plan.ts`);
     if (existsSync(out)) { console.error(`${out} already exists`); process.exit(1); }
     mkdirSync(dirname(out), { recursive: true });
@@ -105,6 +105,6 @@ switch (cmd) {
     process.exit(ds.some((d) => d.level === "error") ? 1 : 0);
   }
   default:
-    console.error("usage: plan new <slug> | plan render|check|read <file> | plan where");
+    console.error("usage: seams new <slug> | seams render|check|read <file> | seams where");
     process.exit(2);
 }

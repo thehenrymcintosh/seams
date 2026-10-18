@@ -23,7 +23,7 @@ useful on a real change.
 A skill you call when you want to plan a change or learn part of a codebase. Each call
 produces one **plan document**: a single HTML file that holds the plan as data and draws
 it in a fixed, standard way. The document is the record. It opens in any browser on its
-own, and when opened with `plan review` every part of it can be pointed at and sent back
+own, and when opened with `seams review` every part of it can be pointed at and sent back
 to the agent.
 
 ```mermaid
@@ -32,7 +32,7 @@ flowchart LR
   Agent -->|asks| Facts["plan facts: TS compiler API"]
   Facts -->|exports, imports, call sites, complexity| Agent
   Agent -->|writes plan JSON| Doc[("plan document .html")]
-  Doc -->|plan render: check + standard views| Doc
+  Doc -->|seams render: check + standard views| Doc
   Doc -->|plan review| Review["Point, batch notes, send"]
   Review -->|feedback anchored to node ids| Agent
 ```
@@ -58,14 +58,14 @@ flowchart LR
 Our own loop, modelled on lavish-axi's but built around plan nodes instead of HTML elements
 (decided: build our own rather than depend on lavish).
 
-- `plan review <doc.html>` serves the document locally and adds a review layer. You click
+- `seams review <doc.html>` serves the document locally and adds a review layer. You click
   any node, operation, change or slice and write a note; notes queue in a side panel and
   are sent as one batch.
-- `plan poll <doc.html>` is what the agent runs: a long poll that returns the batch as
+- `seams poll <doc.html>` is what the agent runs: a long poll that returns the batch as
   structured notes, each anchored to a node id ("about `Orders/contract/Orders/CancelOrder`
   in the proposed tree"), not a CSS selector.
 - The agent edits the plan, re-renders the same file, and the page reloads in place,
-  keeping your unsent notes. `plan reply` posts a short answer into the panel.
+  keeping your unsent notes. `seams reply` posts a short answer into the panel.
 - Notes can also carry intent: *ask about this*, *propose a change here*, *move to phase 2*,
   *map this stub*. Each becomes a typed request the skill knows how to handle.
 - Without the server, the document is a complete read-only plan, and a *copy notes as
@@ -89,7 +89,7 @@ Facts appear in the inspector as evidence on a node ("12 call sites in 4 folders
 
 ### What stays from the prototype
 
-The node types, the checker and the diff. `plan render` refuses to write a document whose
+The node types, the checker and the diff. `seams render` refuses to write a document whose
 plan breaks a rule (a contract exposing a table, a dependency cycle, reaching into another
 module's storage), and prints why, so the agent fixes the plan rather than the page.
 The tree changes from the first draft stand: stable ids, `stub` / `mapped` depth, best
@@ -114,13 +114,13 @@ effort source references, notes and slices.
 
 ## Slices
 
-1. **Format and renderer.** The embedded JSON format and `plan render`, producing the
+1. **Format and renderer.** The embedded JSON format and `seams render`, producing the
    standard document with map, inspector, diff and slices. Proven on the shop example.
 2. **Skill.** The SKILL.md that takes an intent, maps lazily, renders, and iterates.
    Run on a real open-source TypeScript repo.
-3. **Facts.** `plan facts` over the TypeScript compiler API: imports, exports, call sites,
+3. **Facts.** `seams facts` over the TypeScript compiler API: imports, exports, call sites,
    complexity, surfaced in the inspector.
-4. **Review loop.** `plan review`, `plan poll` and `plan reply`: notes on nodes, batching,
+4. **Review loop.** `seams review`, `seams poll` and `seams reply`: notes on nodes, batching,
    delivery to the agent, live reload, and a marker for what changed in each round.
 5. **Slicing and export.** Group the diff into phases and export the pitch and per-slice
    code skeletons.

@@ -1,4 +1,4 @@
-# plan-ast
+# seams
 
 **Plan a code change at the level of boundaries before writing the code.**
 
@@ -22,24 +22,24 @@ endpoints, plus what the change costs and what it needs you to decide.
 You need **Node 22.18 or newer** (`node -v` to check) and a coding agent that supports skills,
 such as Claude Code.
 
-**1. Get the `plan` command**
+**1. Get the `seams` command**
 
 ```sh
-git clone https://github.com/OWNER/plan-ast.git
-cd plan-ast
+git clone https://github.com/thehenrymcintosh/seams.git
+cd seams
 npm link
 ```
 
 Check it worked:
 
 ```sh
-plan where      # prints the folder you cloned into
+seams where      # prints the folder you cloned into
 ```
 
 **2. Add the skill to your agent**
 
 ```sh
-npx skills add OWNER/plan-ast --skill plan-doc
+npx skills add thehenrymcintosh/seams --skill seams
 ```
 
 Add `-g` to install it for every project instead of just the current one.
@@ -49,7 +49,7 @@ Add `-g` to install it for every project instead of just the current one.
 
 ```sh
 mkdir -p ~/.claude/skills
-ln -s "$(plan where)/skills/plan-doc" ~/.claude/skills/plan-doc
+ln -s "$(seams where)/skills/seams" ~/.claude/skills/seams
 ```
 
 </details>
@@ -63,7 +63,7 @@ That's it. There's no build step and nothing else to install.
 In your project, ask the agent:
 
 ```
-/plan-doc we're letting signers delegate to someone else
+/seams we're letting signers delegate to someone else
 ```
 
 Or just say "plan this change" or "help me understand how X works". The agent loads the skill on its own.
@@ -104,6 +104,9 @@ Only the decisions that matter at module level. Function bodies, frameworks and 
 | **Storage** | Where each table lives, and which index serves each lookup | Postgres `Recipient_token_idx` serves "find by token" |
 | **Contracts** | What a module promises others: commands, queries, events, types | `Signing.Reject(token, reason) ! NotFound` |
 | **Endpoints** | How the outside world gets in, with auth | `POST /api/v2/envelope/distribute` → `Envelopes.Send` |
+| **Wiring** | What each module needs from outside (ports), what plugs in per environment, and whether it is injected | `Jobs`: Inngest in prod, local in dev, imported directly |
+| **Signals** | The logs, metrics, traces and audit records, on the operation that emits them | audit `recipient delegated` on `Signing.Delegate` |
+| **Tests** | The tests that exist and the ones the change needs, with level and fakes | unit: "the old token stops working", fakes `Jobs` |
 
 On top of that, each plan has **phases** (slices that ship on their own), **questions** for you,
 **decisions** with their reasons, and a **glossary** of the domain's own words.
@@ -113,8 +116,11 @@ On top of that, each plan has **phases** (slices that ship on their own), **ques
 - **Summary at the top:** the request, change counts (red breaking, amber migration, green
   additive) that filter the map when clicked, your open questions, and the phases in order.
 - **Colour by kind:** cyan endpoints, indigo contracts, pink events, violet types, slate data,
-  blue storage. Red, amber and green are kept for change costs only.
-- **Cards read in request order:** endpoints, contracts, data, storage, then sub-modules.
+  blue storage, warm grey for wiring, signals and tests. Red, amber and green are kept for change
+  costs only.
+- **Cards read in request order:** endpoints, contracts, data, storage, then how it runs (wiring,
+  signals, tests), then sub-modules.
+- **Test coverage in place:** each operation lists the tests that prove it, or says "no test yet".
 - **Focus:** click something and everything unrelated fades.
 - **Domain words** are underlined in the text. Hover one to see what it means.
 
@@ -124,11 +130,11 @@ On top of that, each plan has **phases** (slices that ship on their own), **ques
 
 | Command | Does |
 | --- | --- |
-| `plan new <name>` | Start `plans/<name>.plan.ts` from a template (`--learn` for a learning session) |
-| `plan check <file>` | Run the checker |
-| `plan render <file>` | Write the `.plan.html` page. Refuses if the plan has errors (`--force` to render anyway) |
-| `plan read <file.html>` | Print the plan inside a page as JSON (`--outline` for the agent outline) |
-| `plan where` | Print where plan-ast is installed |
+| `seams new <name>` | Start `plans/<name>.plan.ts` from a template (`--learn` for a learning session) |
+| `seams check <file>` | Run the checker |
+| `seams render <file>` | Write the `.plan.html` page. Refuses if the plan has errors (`--force` to render anyway) |
+| `seams read <file.html>` | Print the plan inside a page as JSON (`--outline` for the agent outline) |
+| `seams where` | Print where seams is installed |
 
 `<file>` can be the `.plan.ts` source, a `.json` export, or a rendered `.html` page.
 
@@ -136,7 +142,7 @@ On top of that, each plan has **phases** (slices that ship on their own), **ques
 
 ## What the checker catches
 
-Errors stop `plan render`. Warnings are shown on the page.
+Errors stop `seams render`. Warnings are shown on the page.
 
 - A dependency cycle between modules
 - A module reading or writing another module's tables
@@ -147,6 +153,10 @@ Errors stop `plan render`. Warnings are shown on the page.
 - A lookup with no index: a warning for SQL (full table scan), an error for DynamoDB (needs a scan)
 - A store holding another module's table, or naming columns that don't exist
 - An endpoint calling an operation the module can't reach
+- A port the code imports directly, so tests can't swap it (and how many tests would need to)
+- A signal or test pointing at something the module doesn't have
+- A token or secret in a log field, or an id or email as a metric label
+- A test faking something that isn't a port or a used contract
 
 Example output from `examples/shop.tangled.ts`:
 
@@ -167,7 +177,7 @@ error   Orders -> Payments -> Orders
 
 | View | File | What you get |
 | --- | --- | --- |
-| Code skeleton | `out/v2/skeleton/` | One folder per module: contract types, repositories, wiring, `routes.ts`, `.sql` DDL, DynamoDB key builders. It typechecks. |
+| Code skeleton | `out/v2/skeleton/` | One folder per module: contract types, repositories, a `Deps` type with every port, `routes.ts`, `ports.ts`, `telemetry.ts` (a typed `emit`), planned tests as `node:test` todos, `.sql` DDL, DynamoDB key builders. It typechecks. |
 | Change review | `out/change-v1-to-v2.md` | Every change tagged `breaking`, `migration`, `additive` or `internal` |
 | Spec | `out/v2/spec.md` | A Markdown spec per module |
 | Diagram | `out/v2/system.mmd` | A Mermaid diagram of the system |
@@ -198,6 +208,9 @@ const orders = module("Orders", {
   Only the root gets a repository. A root can be found through a member: `findBy("Recipient.token")`.
 - **DynamoDB**: `table("Payment", "payments", { pk: "PAY#{id}", gsis: [{ name: "byOrder", pk: "ORDER#{orderId}" }] })`.
 - **Not mapped yet**: `stub("Billing", "What it does", ["Billing"])` names a module without detail.
+- **Wiring**: `ports: [port("Clock", "The current time", ["now()"], { prod: "SystemClock", test: "FixedClock" })]`.
+- **Signals**: `signals: [metric("orders_placed_total", "Orders.PlaceOrder", ["outcome"], { alert: "errors > 5% for 10m" })]`.
+- **Tests**: `tests: [test("a paid order can't be cancelled", "unit", "Orders.CancelOrder", { fakes: ["Payments"] })]`.
 
 </details>
 
@@ -206,14 +219,14 @@ const orders = module("Orders", {
 
 | Path | What it is |
 | --- | --- |
-| `skills/plan-doc/SKILL.md` | The skill: how the agent maps a repo into a plan |
+| `skills/seams/SKILL.md` | The skill: how the agent maps a repo into a plan |
 | `src/ast.ts` | The plan's node types. Start here. |
 | `src/dsl.ts` | Helpers for writing plans |
 | `src/check.ts` | The checker |
 | `src/storage.ts` | Which key or index serves each lookup |
 | `src/views/` | Outline, diff, skeleton, spec and diagram views |
 | `src/render/` | The HTML page (`client.js`, `client.css`, no dependencies) |
-| `src/cli.ts` | The `plan` command |
+| `src/cli.ts` | The `seams` command |
 | `examples/` | A small shop, before and after adding payments, plus a broken version |
 | `plans/documenso-delegation.plan.ts` | A real run on [Documenso](https://github.com/documenso/documenso) |
 | `docs/app-pitch.md` | Where this is heading |
@@ -221,7 +234,7 @@ const orders = module("Orders", {
 </details>
 
 <details>
-<summary><b>Developing plan-ast</b></summary>
+<summary><b>Developing seams</b></summary>
 
 ```sh
 npm install          # TypeScript, for typechecking only
@@ -239,3 +252,4 @@ Node runs the `.ts` files directly, so the code avoids `enum`, `namespace` and p
   complexity) from the TypeScript compiler.
 - The review loop is copy and paste. A command that sends notes straight back to the agent is next.
 - Transactions, sync vs async calls and contract versions aren't modelled yet.
+- The checker doesn't know which tests the change needs; the skill asks for one per new command and invariant.

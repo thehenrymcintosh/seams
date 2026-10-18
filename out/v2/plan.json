@@ -204,6 +204,9 @@
         }
       ],
       "endpoints": [],
+      "ports": [],
+      "signals": [],
+      "tests": [],
       "modules": []
     },
     {
@@ -696,6 +699,74 @@
           "audience": "public"
         }
       ],
+      "ports": [],
+      "signals": [
+        {
+          "kind": "signal",
+          "type": "metric",
+          "name": "orders_placed_total",
+          "on": "Orders.PlaceOrder",
+          "fields": [
+            "outcome"
+          ]
+        },
+        {
+          "kind": "signal",
+          "type": "log",
+          "name": "orders.payment_failed",
+          "on": "Payments.PaymentFailed",
+          "fields": [
+            "orderId",
+            "reason"
+          ]
+        }
+      ],
+      "tests": [
+        {
+          "kind": "test",
+          "name": "placing an order totals its lines",
+          "level": "unit",
+          "covers": [
+            "Orders.PlaceOrder",
+            "Order"
+          ],
+          "fakes": [
+            "Catalog"
+          ],
+          "exists": true
+        },
+        {
+          "kind": "test",
+          "name": "a captured payment marks the order paid",
+          "level": "unit",
+          "covers": [
+            "Payments.PaymentCaptured",
+            "Order"
+          ],
+          "fakes": [
+            "Payments"
+          ]
+        },
+        {
+          "kind": "test",
+          "name": "a paid order can't be cancelled",
+          "level": "unit",
+          "covers": [
+            "Orders.CancelOrder"
+          ],
+          "fakes": []
+        },
+        {
+          "kind": "test",
+          "name": "checkout end to end",
+          "level": "e2e",
+          "covers": [
+            "POST /orders",
+            "GET /orders/{id}/payment"
+          ],
+          "fakes": []
+        }
+      ],
       "modules": []
     },
     {
@@ -921,6 +992,96 @@
         }
       ],
       "endpoints": [],
+      "ports": [
+        {
+          "kind": "port",
+          "name": "Clock",
+          "purpose": "The current time, so tests can pin it.",
+          "methods": [
+            "now()"
+          ],
+          "injected": true,
+          "adapters": [
+            {
+              "name": "SystemClock",
+              "env": "prod"
+            },
+            {
+              "name": "FixedClock",
+              "env": "test"
+            }
+          ]
+        }
+      ],
+      "signals": [
+        {
+          "kind": "signal",
+          "type": "metric",
+          "name": "payments_total",
+          "on": "Payments.StartPayment",
+          "fields": [
+            "outcome"
+          ],
+          "alert": "Failed > 10% for 15m"
+        },
+        {
+          "kind": "signal",
+          "type": "trace",
+          "name": "payments.charge",
+          "on": "Gateway.Charge",
+          "fields": [
+            "provider",
+            "amount"
+          ]
+        },
+        {
+          "kind": "signal",
+          "type": "log",
+          "name": "payments.failed",
+          "on": "Payments.PaymentFailed",
+          "fields": [
+            "orderId",
+            "reason"
+          ]
+        }
+      ],
+      "tests": [
+        {
+          "kind": "test",
+          "name": "a second payment for the same order is refused",
+          "level": "unit",
+          "covers": [
+            "Payments.StartPayment"
+          ],
+          "fakes": [
+            "Gateway",
+            "Clock"
+          ]
+        },
+        {
+          "kind": "test",
+          "name": "a decline publishes PaymentFailed",
+          "level": "unit",
+          "covers": [
+            "Payments.StartPayment",
+            "Payments.PaymentFailed"
+          ],
+          "fakes": [
+            "Gateway",
+            "Clock"
+          ]
+        },
+        {
+          "kind": "test",
+          "name": "payments are found by order through byOrder",
+          "level": "integration",
+          "covers": [
+            "Payments.GetStatus"
+          ],
+          "fakes": [],
+          "note": "Runs against DynamoDB Local."
+        }
+      ],
       "modules": [
         {
           "kind": "module",
@@ -972,6 +1133,9 @@
           "uses": [],
           "stores": [],
           "endpoints": [],
+          "ports": [],
+          "signals": [],
+          "tests": [],
           "modules": []
         }
       ]

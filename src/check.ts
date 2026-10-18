@@ -204,6 +204,50 @@ export function check(plan: Plan): Diagnostic[] {
       }
     }
 
+    // --- 4. wiring: ports are injected, and fakes have something to fake with
+    const ports = m.ports ?? [];
+    dupes(ports.map((p) => p.name), (n) => err(`${m.name} / port ${n}`, "duplicate port"));
+    for (const p of ports) {
+      const at = `${m.name} / port ${p.name}`;
+      if (usedContracts.has(p.name)) err(at, `is also a contract this module uses; a port is for things outside the domain`);
+      if (!p.adapters.some((a) => a.env === "prod")) warn(at, "has no production adapter");
+      const faked = (m.tests ?? []).filter((tc) => tc.fakes.includes(p.name)).length;
+      const fake = p.adapters.some((a) => a.env === "test");
+      const n = `${faked} test${faked === 1 ? "" : "s"}`;
+      if (!p.injected && faked) warn(at, `${n} fake it, but the code imports it directly and has no test adapter; inject it and add a fake`);
+      else if (!p.injected) warn(at, "is imported directly, so a test can't swap it; pass it in as a dependency");
+      else if (faked && !fake) warn(at, `${n} fake it, but it has no test adapter yet`);
+    }
+
+    // --- 5. observability: signals hang off something real, and leak nothing
+    const emitters = new Set<string>([
+      ...m.endpoints.map((e) => e.name),
+      ...ports.map((p) => p.name),
+      ...[...m.provides, ...m.uses.map((u) => ix.contractByName.get(u.contract)).filter((c) => !!c)]
+        .flatMap((c) => [...c.operations, ...c.events].map((x) => `${c.name}.${x.name}`)),
+    ]);
+    dupes((m.signals ?? []).map((x) => x.name), (n) => err(`${m.name} / signal ${n}`, "duplicate signal"));
+    for (const sg of m.signals ?? []) {
+      const at = `${m.name} / ${sg.type} ${sg.name}`;
+      if (!emitters.has(sg.on)) err(at, `"${sg.on}" is not an operation, event, endpoint or port this module has`);
+      for (const f of sg.fields) {
+        if (/token|secret|password/i.test(f)) warn(at, `field "${f}" may put a secret into telemetry`);
+        else if (sg.type === "metric" && /(^id|Id|token|email)$/.test(f)) {
+          warn(at, `label "${f}" has one value per record; metrics with high-cardinality labels get expensive`);
+        }
+      }
+      if (sg.alert && sg.type !== "metric") warn(at, "alerts usually need a metric; logs and traces are hard to alert on");
+    }
+
+    // --- 6. testing: tests name real things, and fakes are ports or used contracts
+    const coverable = new Set<string>([...emitters, ...m.aggregates.map((a) => a.name)]);
+    const fakeable = new Set([...ports.map((p) => p.name), ...m.uses.map((u) => u.contract)]);
+    for (const tc of m.tests ?? []) {
+      const at = `${m.name} / test "${tc.name}"`;
+      for (const c of tc.covers) if (!coverable.has(c)) err(at, `covers "${c}", which this module doesn't have`);
+      for (const f of tc.fakes) if (!fakeable.has(f)) err(at, `fakes "${f}", which is not a port or a contract this module uses`);
+    }
+
     // --- 3. contracts: types resolve, and storage never leaks through them
     for (const c of m.provides) {
       const at = `${m.name} / contract ${c.name}`;

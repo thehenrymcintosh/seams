@@ -36,6 +36,9 @@ export function outline(doc: PlanDocument): string {
   out.push("# - a store lists the physical tables a module owns; each `served by` is the key or index a lookup must use,");
   out.push("#   and `SCAN` marks a lookup with none");
   out.push("# - an endpoint only parses, authorises (`auth`) and calls the operations after `->`; no logic of its own");
+  out.push("# - a port is an interface the module owns and receives as a dependency; never import its adapter directly");
+  out.push("# - each signal is emitted where `on` says, with exactly the listed fields; no secrets, and metric labels stay low-cardinality");
+  out.push("# - each test proves what `covers` names, replacing only what `fakes` names; tests marked (planned) are to be written");
   out.push("# - [stub] modules are named only; their insides are not specified");
   out.push("");
   out.push(...planLines(target));
@@ -103,6 +106,16 @@ function planLines(plan: Plan): string[] {
     for (const c of m.provides) out.push(...contractLines(m, path, c, p));
     for (const ep of m.endpoints) {
       out.push(`${p}endpoint [${ids.endpoint(path, ep.name)}] ${ep.protocol}${ep.method ? ` ${ep.method}` : ""} ${ep.path} auth(${ep.audience}, ${ep.auth}) -> ${ep.calls.join(", ")}`);
+    }
+    for (const pt of m.ports ?? []) {
+      const ad = pt.adapters.map((a) => `${a.env}=${a.name}`).join(" ");
+      out.push(`${p}port [${ids.port(path, pt.name)}]${pt.injected ? "" : " [imported directly]"} ${pt.methods.join("; ")}${ad ? ` adapters ${ad}` : ""} — ${pt.purpose}`);
+    }
+    for (const sg of m.signals ?? []) {
+      out.push(`${p}${sg.type} [${ids.signal(path, sg.name)}] on ${sg.on}${sg.fields.length ? ` { ${sg.fields.join(", ")} }` : ""}${sg.alert ? ` alert "${sg.alert}"` : ""}`);
+    }
+    for (const tc of m.tests ?? []) {
+      out.push(`${p}test [${ids.test(path, tc.name)}] ${tc.level}${tc.exists ? "" : " (planned)"} covers ${tc.covers.join(", ")}${tc.fakes.length ? ` fakes ${tc.fakes.join(", ")}` : ""}`);
     }
     for (const sub of m.modules) visit(sub, `${path}/${sub.name}`, p);
   };
