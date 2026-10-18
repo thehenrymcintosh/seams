@@ -2,6 +2,8 @@
   "name": "plan-ast",
   "private": true,
   "type": "module",
+  "bin": { "plan": "src/cli.ts" },
+  "engines": { "node": ">=22.18" },
   "scripts": {
     "render": "node run.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p out/v2/skeleton/tsconfig.json"

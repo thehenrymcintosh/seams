@@ -1,14 +1,17 @@
+#!/usr/bin/env node
 // plan CLI.
 // A document is read from .json, from a rendered .html, or from a .ts file whose
 // default export is the document (the form the plan skill writes).
 //
+//   plan new    <slug> [--learn]                 start plans/<slug>.plan.ts from a template
+//   plan where                                   print the folder plan-ast is installed in
 //   node src/cli.ts render <doc.ts|doc.json|doc.html> [-o out.html] [--force]
 //   node src/cli.ts read   <doc.html> [--outline] print the embedded document as JSON, or as the agent outline
 //   node src/cli.ts check  <doc.json|doc.html>    run the checker on both trees
 
-import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { check, type Diagnostic } from "./check.ts";
 import type { PlanDocument } from "./doc.ts";
 import { readDocument, renderDocument } from "./render/render.ts";
@@ -32,7 +35,52 @@ function diagnostics(doc: PlanDocument): Diagnostic[] {
 
 const print = (ds: Diagnostic[]) => ds.forEach((d) => console.error(`${d.level.padEnd(7)} ${d.at}\n        ${d.message}`));
 
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+// A new plan document with the imports and every section in place.
+function template(slug: string, learn: boolean): string {
+  const title = slug.replace(/[-_]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+  return `import type { PlanDocument } from "${ROOT}/src/doc.ts";
+import {
+  aggregate, command, contract, entity, enumOf, event, findBy, get, http, idx, module, plan, query, record, repo, rpc, save,
+  src, store, stub, subscribe, t, table, uniqueIdx,
+} from "${ROOT}/src/dsl.ts";
+
+// Map the modules the intent touches here; name everything else with stub().
+const current = plan("system", [
+  stub("Example", "Replace with a real module."),
+]);
+
+const doc: PlanDocument = {
+  format: "plan-doc/1",
+  title: ${JSON.stringify(title)},
+  intent: "What the user asked for, in their words.",
+  mode: ${JSON.stringify(learn ? "learn" : "plan")},
+  current,${learn ? "" : "\n  proposed: current, // replace the modules that change"}
+  slices: [],
+  questions: [],
+  decisions: [],
+  facts: {},
+  glossary: [],
+};
+
+export default doc;
+`;
+}
+
 switch (cmd) {
+  case "where":
+    console.log(ROOT);
+    break;
+  case "new": {
+    if (!file) { console.error("usage: plan new <slug> [--learn]"); process.exit(2); }
+    const out = resolve("plans", `${file}.plan.ts`);
+    if (existsSync(out)) { console.error(`${out} already exists`); process.exit(1); }
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, template(file, rest.includes("--learn") || file === "--learn"));
+    console.log(out);
+    break;
+  }
   case "render": {
     const doc = await load(file);
     const ds = diagnostics(doc);
@@ -57,6 +105,6 @@ switch (cmd) {
     process.exit(ds.some((d) => d.level === "error") ? 1 : 0);
   }
   default:
-    console.error("usage: plan render|read|check <file>");
+    console.error("usage: plan new <slug> | plan render|check|read <file> | plan where");
     process.exit(2);
 }

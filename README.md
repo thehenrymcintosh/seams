@@ -1,152 +1,241 @@
-# plan-ast: a planning model for TypeScript systems
+# plan-ast
 
-A first prototype of a planning representation that sits above code. A plan is
-a typed tree (an AST) holding only the decisions that matter at the module
-level, in the three categories:
+**Plan a code change at the level of boundaries before writing the code.**
 
-1. **Data**: what is stored and how it is accessed (entities, aggregates, repositories), and the
-   physical stores that hold it (Postgres tables and indexes, DynamoDB keys and GSIs)
-2. **Module split**: which modules exist and who depends on whom
-3. **Contracts**: what each module promises the others (operations, errors, events, DTO types), and
-   the endpoints that expose them (HTTP routes, tRPC procedures) with their auth
+You describe a change. Your coding agent maps the parts of the codebase it touches and writes one
+HTML page: the modules, the data they own, the contracts between them, the storage and the
+endpoints, plus what the change costs and what it needs you to decide.
 
-Nothing else goes in the plan. Function bodies, frameworks and infrastructure
-stay in code. Every other format (diagram, spec, code skeleton, change review)
-is a **view** derived from the tree, so there is one source of truth and the
-right view can be picked per context.
+![A plan for adding signer delegation to Documenso](docs/documenso-delegation.png)
 
-## Layout
+- **One file per session.** The page opens in any browser, works offline and can be shared as is.
+- **Made for reviewing fast.** A summary comes first, colour means one thing at a time, and
+  everything starts collapsed.
+- **Checked, not just drawn.** A checker catches cycles, modules reaching into each other's tables,
+  lookups with no index, and endpoints calling things they shouldn't.
+- **Readable by the agent too.** The page carries a text outline the agent validates its code against.
+
+---
+
+## Install
+
+You need **Node 22.18 or newer** (`node -v` to check) and a coding agent that supports skills,
+such as Claude Code.
+
+**1. Get the `plan` command**
+
+```sh
+git clone https://github.com/OWNER/plan-ast.git
+cd plan-ast
+npm link
+```
+
+Check it worked:
+
+```sh
+plan where      # prints the folder you cloned into
+```
+
+**2. Add the skill to your agent**
+
+```sh
+npx skills add OWNER/plan-ast --skill plan-doc
+```
+
+Add `-g` to install it for every project instead of just the current one.
+
+<details>
+<summary>Or link it by hand (Claude Code)</summary>
+
+```sh
+mkdir -p ~/.claude/skills
+ln -s "$(plan where)/skills/plan-doc" ~/.claude/skills/plan-doc
+```
+
+</details>
+
+That's it. There's no build step and nothing else to install.
+
+---
+
+## Use it
+
+In your project, ask the agent:
+
+```
+/plan-doc we're letting signers delegate to someone else
+```
+
+Or just say "plan this change" or "help me understand how X works". The agent loads the skill on its own.
+
+It writes two files in `plans/`:
 
 | File | What it is |
 | --- | --- |
-| `src/ast.ts` | The node types. Start here. |
-| `src/dsl.ts` | Small helpers so a plan reads like a spec. Plans stay plain data. |
-| `src/check.ts` | The rules that keep modules tidy. |
-| `src/storage.ts` | Which key or index serves each access pattern, per store engine. |
-| `src/views/mermaid.ts` | Diagram view: system graph and per-module ER diagrams. |
-| `src/views/spec.ts` | Text view: a reviewable Markdown spec. |
-| `src/views/skeleton.ts` | Code view: a TypeScript skeleton that typechecks. |
-| `src/views/diff.ts` | Change view: diff two plans, tag each change by its cost. |
-| `examples/shop.v1.ts` | Worked example: Catalog and Orders. |
-| `examples/shop.v2.ts` | The planned change: add Payments. |
-| `examples/shop.tangled.ts` | A bad version of v2, to show the checker. |
-| `src/ids.ts` | Stable node ids that notes, slices and diffs refer to. |
-| `src/doc.ts` | The plan document format: intent, current and proposed trees, slices, questions, decisions, code facts. |
-| `src/render/` | Renders a plan document to one standalone HTML file (`render.ts`, `viewmodel.ts`, inline `client.js` and `client.css`). |
-| `src/cli.ts` | `render`, `read` and `check` for plan documents. |
-| `examples/shop.doc.ts` | The worked example as a plan document, with two stub modules. |
-| `skill/SKILL.md` | The plan-doc skill: how an agent maps a repo from an intent into a plan document. |
-| `plans/documenso-delegation.plan.ts` | The skill's first real run: signer delegation in [Documenso](https://github.com/documenso/documenso). Rendered next to it as `.plan.html`. |
-| `docs/app-pitch.md` | Where this is heading: a skill that writes plan documents, with its own review loop. |
-| `out/` | Everything `run.ts` renders, including `shop-payments.plan.html`. |
+| `<name>.plan.ts` | The plan's source. The agent edits this. |
+| `<name>.plan.html` | The page you open and review. |
 
-Run it with Node 22.18+ (no build step; Node runs the `.ts` files directly):
+### Review loop
 
-```sh
-node run.ts            # renders out/
-npm install && npm run typecheck   # typechecks the prototype and the generated skeleton
-```
+1. Open the `.html` file.
+2. Click anything on the map and write a note about it in the sidebar.
+3. Press **Copy as prompt** and paste the notes back to the agent.
+4. The agent updates the plan and re-renders the same file.
 
-## Plan documents
+### Keys on the page
 
-A plan document is one HTML file that opens in any browser and makes no network requests.
-It carries the plan three ways:
+| Key | Does |
+| --- | --- |
+| `/` | Jump to any module, endpoint, table or term |
+| `Esc` | Clear the focus and filters |
+| `f` | Fit the map to the screen |
+| `1` `2` `3` | Show one phase of the change |
 
-- **For people:** a briefing first (the ask, what the change costs as clickable counts, questions
-  waiting on you, the phases in order, and the domain's own words with hover definitions), then one
-  pannable, zoomable canvas. Modules are cards placed as a graph (springs
-  along calls, events and shared types; cards never overlap; drag one and it stays put).
-  Everything starts collapsed. Contracts and stored tables are rows that expand in place; types open as cards under the contract that defines them and wire back to every use
-  in other modules. Changes are shown on the node they affect, and new dependencies are drawn as
-  green wires. Phases, open questions and decisions sit below the canvas in collapsible sections. A thin sidebar holds
-  the conversation: click anything to attach a note to it.
-- **For an agent:** `#plan-outline`, a compact text outline (`src/views/outline.ts`). Every line
-  starts with a node id, signatures are TypeScript-shaped, the rules the code must follow are at
-  the top, and the change list is stated once. This is the reference to validate code against.
-- **As the source:** `#plan-doc`, the document as JSON, which is what gets edited and re-rendered.
+---
 
-```sh
-node src/cli.ts render plan.ts                   # .ts (default export), .json or .html; writes plan.plan.html
-node src/cli.ts render plan.json -o plan.html   # refuses if the plan breaks a rule (--force to show it anyway)
-node src/cli.ts read plan.html                   # the embedded document back out, as JSON
-node src/cli.ts read plan.html --outline         # the agent outline
-node src/cli.ts check plan.html
-```
+## What a plan contains
 
-## The model in one paragraph
+Only the decisions that matter at module level. Function bodies, frameworks and UI stay in code.
 
-Ownership is structural. An entity sits inside the module that owns it, and a
-contract sits inside the module that provides it, so "who owns this table" is
-not a convention, it is the shape of the tree. The only edges that cross
-module boundaries are `uses` (depend on another module's contract, optionally
-subscribing to its events) and qualified type references such as
-`Catalog.ProductSummary`, which are only legal through a contract you use.
-Repositories declare access patterns (`get`, `findBy("customerId")`, `save`)
-rather than queries, so the plan knows every way a module touches its data.
+| Part | What it says | Example |
+| --- | --- | --- |
+| **Modules** | Who is responsible for what, and who depends on whom | `Envelopes` uses `Accounts` |
+| **Data** | The tables each module owns, grouped into aggregates with their rules | `Envelope` + `Recipient`, "recipients only act while PENDING" |
+| **Storage** | Where each table lives, and which index serves each lookup | Postgres `Recipient_token_idx` serves "find by token" |
+| **Contracts** | What a module promises others: commands, queries, events, types | `Signing.Reject(token, reason) ! NotFound` |
+| **Endpoints** | How the outside world gets in, with auth | `POST /api/v2/envelope/distribute` → `Envelopes.Send` |
 
-## Boundaries inside a module
+On top of that, each plan has **phases** (slices that ship on their own), **questions** for you,
+**decisions** with their reasons, and a **glossary** of the domain's own words.
 
-- **Sub-modules** nest inside a module (`modules: [...]`). Their contracts are visible to the
-  parent and its other sub-modules, never from outside: from outside, only the parent's own
-  contracts count. In code they become folders inside the parent's (`payments/gateway/`).
-- **Aggregates** group tables that change together (`aggregate("Order", ["OrderLine"], invariants)`).
-  Only the root has a repository, and it loads and saves the whole aggregate
-  (`OrderRepository.get(): OrderAggregate`). Invariants are written down on the aggregate and
-  carried into the generated types as comments. A root can be found through a member's indexed
-  field: `findBy("Recipient.token")` loads the envelope a signing token belongs to.
+### What the page shows
 
-## Storage and endpoints
+- **Summary at the top:** the request, change counts (red breaking, amber migration, green
+  additive) that filter the map when clicked, your open questions, and the phases in order.
+- **Colour by kind:** cyan endpoints, indigo contracts, pink events, violet types, slate data,
+  blue storage. Red, amber and green are kept for change costs only.
+- **Cards read in request order:** endpoints, contracts, data, storage, then sub-modules.
+- **Focus:** click something and everything unrelated fades.
+- **Domain words** are underlined in the text. Hover one to see what it means.
 
-Entities say what is stored; a **store** says where and how. Each binding maps an entity to a
-table (`table("Recipient", "Recipient", { indexes: [idx("token")] })`) or, for DynamoDB, to key
-templates (`pk: "PAY#{id}"`, `gsis: [{ name: "byOrder", pk: "ORDER#{orderId}" }]`). Columns are
-derived from the entity's fields, so a binding lists only overrides. Every access pattern is then
-checked against the physical keys: a Postgres lookup with no index is a warning (a full table
-scan), a DynamoDB lookup with no key or GSI is an error. The page shows, under each index, which
-lookups it serves.
+---
 
-An **endpoint** (`http("POST", "/orders", "Orders.PlaceOrder", { auth: "session" })` or
-`rpc("trpc", "recipient.rejectDocumentWithToken", "Signing.Reject", …)`) belongs to a module and
-may only call operations of contracts that module uses or provides. Removing one or changing its
-auth is a breaking change. The skeleton emits `routes.ts`, which binds each endpoint to the
-contract method so the compiler checks it, plus `<store>.sql` DDL and `<store>.keys.ts` key builders.
+## Commands
 
-## What the checker enforces
+| Command | Does |
+| --- | --- |
+| `plan new <name>` | Start `plans/<name>.plan.ts` from a template (`--learn` for a learning session) |
+| `plan check <file>` | Run the checker |
+| `plan render <file>` | Write the `.plan.html` page. Refuses if the plan has errors (`--force` to render anyway) |
+| `plan read <file.html>` | Print the plan inside a page as JSON (`--outline` for the agent outline) |
+| `plan where` | Print where plan-ast is installed |
 
-Run on `examples/shop.tangled.ts` (output in `out/tangled-check.txt`):
+`<file>` can be the `.plan.ts` source, a `.json` export, or a rendered `.html` page.
+
+---
+
+## What the checker catches
+
+Errors stop `plan render`. Warnings are shown on the page.
+
+- A dependency cycle between modules
+- A module reading or writing another module's tables
+- A contract that exposes a table instead of its own type
+- Using another module's type without declaring the dependency
+- Reaching into a sub-module from outside its parent
+- A table in an aggregate with its own repository (only the root has one)
+- A lookup with no index: a warning for SQL (full table scan), an error for DynamoDB (needs a scan)
+- A store holding another module's table, or naming columns that don't exist
+- An endpoint calling an operation the module can't reach
+
+Example output from `examples/shop.tangled.ts`:
 
 ```
-warning Payments / PaymentRepository
-        findBy orderId has no supporting index on Payment
+error   Orders / uses Gateway
+        reaches inside Payments: Gateway is internal to it; use a contract Payments provides instead
 error   Payments / OrderRepository
         reaches into storage owned by Orders; go through the Orders module's contract instead
-error   Payments / contract Payments / StartPayment -> output
-        exposes storage entity "Order"; define a contract type instead
 error   Orders -> Payments -> Orders
         dependency cycle between modules
 ```
 
-The full list: references resolve; one owner per entity; repositories only
-touch their own module's entities; every `findBy` is backed by the key or an
-index; contracts never expose storage entities; cross-module types need a
-declared dependency; subscribed events exist; no dependency cycles; a module
-that owns data provides some contract; a contract appears once in `uses`; a store only
-holds its own module's tables, and its indexes and key templates name real fields; every lookup
-is served by a key or index; endpoints only call operations they can reach.
+---
 
-The change view also tags a value added to an enum that a table stores as a
-`migration`, since a database enum has to be altered first.
+## Turning a plan into code
 
-## Views
+`run.ts` shows every view on the worked example (`node run.ts`, output in `out/`):
 
-- **Diagram** (`out/v2/system.mmd`, and inside each spec): modules with the data they own and the contracts they provide, arrows for calls and dashed arrows for events.
-- **Spec** (`out/v2/spec.md`): per module, its purpose, dependencies, ER diagram, access patterns and contract signatures.
-- **Code skeleton** (`out/v2/skeleton/`): one folder per module. `*.contract.ts` is public; `schema.ts` and `repositories.ts` are private; `index.ts` is the wiring (`createOrders(deps)` takes the contracts it uses and its repositories, returns its Api and event handlers). Cross-module imports are only ever `import type * as X from "../x/X.contract.ts"`, so the boundary can be linted. Errors are part of the contract and come out as `Result<T, "NotFound" | ...>`.
-- **Change review** (`out/change-v1-to-v2.md`): a planned change is a diff between two plans. Each line is tagged `breaking`, `migration`, `additive` or `internal`, and consumers who must change are listed first. It also catches cross-category effects, e.g. dropping the `Placed` value from the `OrderStatus` contract type is flagged as a data migration because the `Order` entity stores it.
+| View | File | What you get |
+| --- | --- | --- |
+| Code skeleton | `out/v2/skeleton/` | One folder per module: contract types, repositories, wiring, `routes.ts`, `.sql` DDL, DynamoDB key builders. It typechecks. |
+| Change review | `out/change-v1-to-v2.md` | Every change tagged `breaking`, `migration`, `additive` or `internal` |
+| Spec | `out/v2/spec.md` | A Markdown spec per module |
+| Diagram | `out/v2/system.mmd` | A Mermaid diagram of the system |
 
-## Known gaps and next questions
+---
 
-- **Plan and code drift.** Today the skeleton is generated one way. The obvious next step is the reverse: extract a plan from existing TypeScript (contract files and the import graph) and diff it against the intended plan, so the plan stays true after code is written.
-- **Authoring format.** Plans are written as TypeScript with a small DSL, which gives type safety and autocomplete for free. A visual editor or a YAML form could sit on the same AST later.
-- **Not modelled yet:** transactions and consistency boundaries, sync vs. async calls, versioning of contracts, non-functional notes (latency, volume) on access patterns.
-- **AI use.** The checker's rules are exactly the assumptions an agent could rely on: a change scoped to one module only touches its folder, and a change to a `*.contract.ts` file is the only kind that needs cross-module review.
+<details>
+<summary><b>Writing plans by hand</b></summary>
+
+Plans are TypeScript using a small set of helpers (`src/dsl.ts`). They stay plain data.
+
+```ts
+const orders = module("Orders", {
+  purpose: "Turns a basket into an order and tracks it.",
+  entities: [entity("Order", { id: t.uuid, customerId: t.uuid, total: t.decimal })],
+  repositories: [repo("Order", [get, findBy("customerId"), save])],
+  stores: [store("orders db", "postgres", [table("Order", "orders", { indexes: [idx("customerId")] })])],
+  provides: [contract("Orders", {
+    operations: [command("PlaceOrder", { customerId: t.uuid }, t.uuid, ["EmptyOrder"])],
+  })],
+  endpoints: [http("POST", "/orders", "Orders.PlaceOrder", { auth: "session" })],
+  uses: ["Catalog"],
+});
+```
+
+- **Sub-modules** go in `modules: [...]`. Only the parent and its other sub-modules can use them.
+- **Aggregates**: `aggregate("Order", ["OrderLine"], ["Total equals the sum of its lines."])`.
+  Only the root gets a repository. A root can be found through a member: `findBy("Recipient.token")`.
+- **DynamoDB**: `table("Payment", "payments", { pk: "PAY#{id}", gsis: [{ name: "byOrder", pk: "ORDER#{orderId}" }] })`.
+- **Not mapped yet**: `stub("Billing", "What it does", ["Billing"])` names a module without detail.
+
+</details>
+
+<details>
+<summary><b>Repo layout</b></summary>
+
+| Path | What it is |
+| --- | --- |
+| `skills/plan-doc/SKILL.md` | The skill: how the agent maps a repo into a plan |
+| `src/ast.ts` | The plan's node types. Start here. |
+| `src/dsl.ts` | Helpers for writing plans |
+| `src/check.ts` | The checker |
+| `src/storage.ts` | Which key or index serves each lookup |
+| `src/views/` | Outline, diff, skeleton, spec and diagram views |
+| `src/render/` | The HTML page (`client.js`, `client.css`, no dependencies) |
+| `src/cli.ts` | The `plan` command |
+| `examples/` | A small shop, before and after adding payments, plus a broken version |
+| `plans/documenso-delegation.plan.ts` | A real run on [Documenso](https://github.com/documenso/documenso) |
+| `docs/app-pitch.md` | Where this is heading |
+
+</details>
+
+<details>
+<summary><b>Developing plan-ast</b></summary>
+
+```sh
+npm install          # TypeScript, for typechecking only
+node run.ts          # regenerate out/
+npm run typecheck    # the code and the generated skeleton
+```
+
+Node runs the `.ts` files directly, so the code avoids `enum`, `namespace` and parameter properties.
+
+</details>
+
+## Known gaps
+
+- Plans are written from reading the code. Nothing yet extracts facts (imports, call sites,
+  complexity) from the TypeScript compiler.
+- The review loop is copy and paste. A command that sends notes straight back to the agent is next.
+- Transactions, sync vs async calls and contract versions aren't modelled yet.

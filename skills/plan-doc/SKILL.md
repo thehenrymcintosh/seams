@@ -10,7 +10,8 @@ module boundaries, the data each module owns, and the contracts between them, as
 in TypeScript with the plan-ast DSL. The CLI checks the tree and renders one HTML file that a
 person reviews and that you read back on the next round.
 
-`PLAN_AST` below is the folder that holds this skill's `src/` (the plan-ast repo).
+It needs the `plan` command (from the plan-ast repo, installed with `npm link`). If `plan where`
+fails, tell the user to install plan-ast first (see its README) and stop.
 
 ## When to use it
 
@@ -70,16 +71,11 @@ them directly. Say so in a note.
 
 ## Writing the document
 
-Write `plans/<slug>.plan.ts` in the user's working folder (or the folder they name). Its default
-export is a `PlanDocument`:
+Start the file with `plan new <slug>` (or `plan new <slug> --learn`) in the user's working folder.
+It writes `plans/<slug>.plan.ts` with the imports and every section in place. Its default export is
+a `PlanDocument`; the DSL helpers are documented in `$(plan where)/src/dsl.ts`.
 
-```ts
-import type { PlanDocument } from "PLAN_AST/src/doc.ts";
-import { aggregate, command, contract, entity, enumOf, event, findBy, get, http, idx, module, plan,
-  query, record, repo, rpc, save, src, store, stub, subscribe, t, table, uniqueIdx } from "PLAN_AST/src/dsl.ts";
-```
-
-Use absolute paths for those imports. Build the current modules once, then build the proposed
+Build the current modules once, then build the proposed
 tree by replacing only the modules that change (spread the current one and override), so
 unchanged modules are written once.
 
@@ -108,9 +104,9 @@ unchanged modules are written once.
 ## Check, render, read back
 
 ```sh
-node PLAN_AST/src/cli.ts check  plans/<slug>.plan.ts
-node PLAN_AST/src/cli.ts render plans/<slug>.plan.ts          # writes plans/<slug>.plan.html
-node PLAN_AST/src/cli.ts read   plans/<slug>.plan.html --outline
+plan check  plans/<slug>.plan.ts
+plan render plans/<slug>.plan.ts          # writes plans/<slug>.plan.html
+plan read   plans/<slug>.plan.html --outline
 ```
 
 `render` refuses a plan with errors. Fix errors by changing the model, not by deleting the rule's
