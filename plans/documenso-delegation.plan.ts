@@ -208,7 +208,11 @@ const emailsV1 = module("Emails", {
   sources: [src("packages/lib/jobs/definitions/emails/"), src("packages/email/templates/")],
   note: "Each email is a background job whose handler reads the envelope through Prisma itself. Conceptually it reads through GetEnvelope.",
   uses: [subscribe("Envelopes", "SigningRequested", "RecipientCompleted", "RecipientRejected", "EnvelopeCompleted")],
-  gaps: [gap("Accounts", "Account emails (confirmation, password reset) live in the same job folder and call user functions directly.")],
+  gaps: [
+    gap("Accounts", "Account emails (confirmation, password reset) live in the same job folder and call user functions directly."),
+    gap("SigningOrder", "Email handlers import utils/recipients to work out who signs next (9 imports), reaching inside Envelopes."),
+    gap("AuditTrail", "Email handlers read audit log types directly (4 imports), reaching inside Envelopes."),
+  ],
   ports: [port("Mailer", "Sends one rendered email.", ["sendMail({ to, from, subject, html, text })"],
     { prod: ["SMTP", "Resend", "MailChannels"], local: "SMTP on 127.0.0.1:2500" },
     { injected: false, sources: [src("packages/email/mailer.ts", "mailer", 108)], note: "Chosen by NEXT_PRIVATE_SMTP_TRANSPORT and imported directly in 11 files." })],
@@ -270,7 +274,11 @@ const apiModule = (endpoints = apiEndpoints) => module("Api", {
   sources: [src("packages/trpc/server/"), src("packages/api/v1/"), src("apps/remix/server/router.ts")],
   note: "Rate limits and CSRF are applied per prefix in apps/remix/server/router.ts. Only the endpoints near the change are listed.",
   uses: ["Envelopes", "Signing", "Webhooks", "Accounts"],
-  gaps: [gap("Templates", "The envelope router also serves template actions; Templates has no mapped contract yet.")],
+  gaps: [
+    gap("Templates", "The envelope router also serves template actions; Templates has no mapped contract yet."),
+    gap("AuditTrail", "Routers format audit logs with utils/document-audit-logs directly (10 imports), reaching inside Envelopes."),
+    gap("SigningOrder", "Routers import utils/recipients for signing order checks (6 imports), reaching inside Envelopes."),
+  ],
   endpoints,
   signals: endpoints.filter((e) => e.path.startsWith("recipient.")).map((e) =>
     log(`${e.path} called`, e.name, ["requestId", "ipAddress", "userAgent", "documentId"],

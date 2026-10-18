@@ -651,7 +651,7 @@
       h("button", { class: cls("row-head", t && t !== "internal" && `mark-${t}`), "aria-expanded": String(open), onclick: () => toggle(ep.id) },
         h("span", { class: `verb v-${(ep.method || ep.protocol).toLowerCase()}` }, ep.method || ep.protocol),
         h("span", { class: "path" }, pathTokens(ep.path)),
-        h("span", { class: cls("aud", `a-${ep.audience}`), title: `${ep.audience} · auth: ${ep.auth}` }, lock()),
+        /^(none|public)$/i.test(ep.auth) ? null : h("span", { class: cls("aud", `a-${ep.audience}`), title: `${ep.audience} · auth: ${ep.auth}` }, lock()),
         h("span", { class: "chev", "aria-hidden": "true" }, "›")),
       changeList(ctx.placed.get(ep.id)),
       open ? h("div", { class: "row-body" },

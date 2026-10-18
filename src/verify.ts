@@ -75,7 +75,8 @@ export function verify(plan: Plan, root: string, baseline?: Plan): Finding[] {
   // --- imports: who owns each file is decided by the most specific module source
   const owners: { dir: string; module: Module; path: string }[] = [];
   for (const { module: m, path } of tree) {
-    for (const s of m.sources ?? []) if (repo.isDir(s.path)) owners.push({ dir: trim(s.path), module: m, path });
+    // A folder owns everything under it; a file owns itself.
+    for (const s of m.sources ?? []) if (repo.exists(s.path)) owners.push({ dir: trim(s.path), module: m, path });
   }
   owners.sort((a, b) => b.dir.length - a.dir.length);
   const ownerOf = (file: string) => owners.find((o) => file === o.dir || file.startsWith(`${o.dir}/`));
@@ -187,7 +188,12 @@ function allowed(from: Module, to: Module, tree: ReturnType<typeof walk>, ix: Re
 }
 
 const trim = (p: string) => p.replace(/\/+$/, "");
-const wordRe = (s: string) => new RegExp(`\\b${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+// A symbol as a whole word. Symbols can start or end with punctuation
+// (a quoted command name), where \b would never match.
+const wordRe = (s: string) => {
+  const body = s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`${/^\w/.test(s) ? "(?<![\\w$])" : ""}${body}${/\w$/.test(s) ? "(?![\\w$])" : ""}`);
+};
 
 // The repository, read lazily and cached: file lists, contents, packages.
 class Repo {

@@ -1,0 +1,1837 @@
+<!doctype html>
+<html lang="en" data-lavish-annotate="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="seams">
+<title>seams, mapped with seams</title>
+<style>
+/* Colour carries two separate meanings and they never share a hue:
+   - kind (what a thing is): endpoint cyan, contract indigo, event pink,
+     type violet, data slate, storage teal-blue; shown as icon tint, labels
+     and thin rules
+   - cost of a change: breaking red, migration amber, additive green; shown
+     as filled pills, bars and card borders
+   Everything else stays neutral, so colour always means something. */
+:root {
+  --bg: #f5f5f2;
+  --surface: #ffffff;
+  --surface-2: #f0efea;
+  --surface-3: #e7e5df;
+  --text: #1b1b19;
+  --muted: #64635e;
+  --faint: #8f8d86;
+  --border: #dddbd4;
+  --accent: #2f5bd3;
+  --accent-soft: rgba(47, 91, 211, 0.12);
+
+  --k-endpoint: #0b7285;
+  --k-contract: #3b5bdb;
+  --k-event: #c2255c;
+  --k-type: #7048c8;
+  --k-data: #5c6b7a;
+  --k-storage: #1c6e8c;
+  --k-inside: #6b6a66;
+  --k-run: #7c6f64;
+  --type: var(--k-type);
+  --type-soft: rgba(112, 72, 200, 0.12);
+
+  --breaking: #c92a2a;
+  --migration: #b35c00;
+  --additive: #2b8a3e;
+  --breaking-bg: #fde8e8;
+  --migration-bg: #fff0db;
+  --additive-bg: #e3f5e6;
+  --ask: #6741d9;
+  --ask-bg: #f0ebff;
+
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 14px rgba(0, 0, 0, 0.05);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131312;
+    --surface: #1c1c1a;
+    --surface-2: #252523;
+    --surface-3: #31312e;
+    --text: #edece8;
+    --muted: #a8a7a0;
+    --faint: #7c7b75;
+    --border: #383834;
+    --accent: #8aa4ff;
+    --accent-soft: rgba(138, 164, 255, 0.16);
+
+    --k-endpoint: #3bc9db;
+    --k-contract: #91a7ff;
+    --k-event: #f783ac;
+    --k-type: #b197fc;
+    --k-data: #a5b4c3;
+    --k-storage: #66b8d6;
+    --k-inside: #a8a7a0;
+    --k-run: #c4b8ad;
+    --type-soft: rgba(177, 151, 252, 0.16);
+
+    --breaking: #ff8787;
+    --migration: #ffb454;
+    --additive: #69db7c;
+    --breaking-bg: #3d1d1d;
+    --migration-bg: #3a2a12;
+    --additive-bg: #18331f;
+    --ask: #b197fc;
+    --ask-bg: #2a2340;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.25);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); }
+button { font: inherit; color: inherit; }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+h1 { font-size: 21px; margin: 0; letter-spacing: -0.015em; }
+h2 { font-size: 15px; margin: 28px 0 10px; }
+h3 { font-size: 14px; margin: 0 0 4px; }
+p { margin: 4px 0; }
+kbd { font: 11px var(--mono); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--surface); color: var(--text); }
+.muted { color: var(--muted); }
+.noscript { padding: 16px; }
+.badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+.linklike { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; text-align: left; }
+.x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* shell: main column + thin conversation sidebar */
+.shell { display: grid; grid-template-columns: minmax(0, 1fr) 290px; min-height: 100vh; }
+.main { min-width: 0; padding: 18px 22px 48px; }
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .main { padding: 14px 16px 32px; }
+}
+
+header.top { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.heading { display: flex; gap: 10px; align-items: center; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tabs { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.tabs button { border: 0; background: transparent; padding: 5px 13px; cursor: pointer; }
+.tabs button + button { border-left: 1px solid var(--border); }
+.tabs button[aria-pressed="true"] { background: var(--text); color: var(--bg); font-weight: 600; }
+
+/* search */
+.search { position: relative; }
+.search input { width: 240px; max-width: 100%; font: inherit; font-size: 13px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+.search input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.hits { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; width: 380px; max-width: calc(100vw - 32px); list-style: none; margin: 0; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); }
+.hits li { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 0 8px; padding: 5px 8px; border-radius: 6px; cursor: pointer; }
+.hits li.on, .hits li:hover { background: var(--surface-2); }
+.hit-label { font-family: var(--mono); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hit-hint { grid-column: 2; font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kind { grid-row: span 2; align-self: start; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding-top: 2px; }
+.kind.k-endpoint { color: var(--k-endpoint); }
+.kind.k-contract, .kind.k-operation { color: var(--k-contract); }
+.kind.k-event { color: var(--k-event); }
+.kind.k-type { color: var(--k-type); }
+.kind.k-data { color: var(--k-data); }
+.kind.k-storage { color: var(--k-storage); }
+.kind.k-word { color: var(--ask); }
+
+/* briefing: the page in ten seconds */
+.briefing { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px 18px; align-items: start; margin-bottom: 12px; }
+@media (max-width: 1100px) { .briefing { grid-template-columns: minmax(0, 1fr); } }
+.eyebrow { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.ask { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--text); border-radius: 10px; padding: 10px 14px; }
+.ask p { font-size: 15px; line-height: 1.45; margin: 2px 0 0; }
+.tiles { display: flex; flex-wrap: wrap; gap: 8px; }
+.tile { display: flex; flex-direction: column; align-items: flex-start; min-width: 76px; padding: 6px 11px 7px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; text-align: left; transition: transform 0.1s, box-shadow 0.1s; }
+.tile:not(:disabled):hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+.tile:disabled { cursor: default; opacity: 0.5; }
+.tile .n { font-size: 22px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .l { font-size: 12px; color: var(--muted); }
+.tile.breaking .n { color: var(--breaking); }
+.tile.migration .n { color: var(--migration); }
+.tile.additive .n { color: var(--additive); }
+.tile.asks .n { color: var(--ask); }
+.tile.checks .n { color: var(--migration); }
+.tile.breaking.active { background: var(--breaking-bg); border-color: var(--breaking); }
+.tile.migration.active { background: var(--migration-bg); border-color: var(--migration); }
+.tile.additive.active { background: var(--additive-bg); border-color: var(--additive); }
+.tile.asks:not(:disabled) { background: var(--ask-bg); border-color: color-mix(in srgb, var(--ask) 40%, var(--border)); }
+.stepper { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; counter-reset: s; }
+.stepper button { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 3px 12px 3px 4px; cursor: pointer; font-size: 13px; }
+.stepper li:first-child button { padding-left: 12px; }
+.stepper button[aria-pressed="true"] { border-color: var(--text); background: var(--text); color: var(--bg); }
+.stepper li + li::before { content: "→"; color: var(--faint); margin-right: 6px; }
+.stepper li:nth-child(2)::before { content: none; }
+.stepper li { display: inline-flex; align-items: center; }
+.step { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-3); color: var(--text); font-size: 11.5px; font-weight: 700; flex: none; }
+.stepper button[aria-pressed="true"] .step { background: var(--bg); color: var(--text); }
+.words { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.words .eyebrow { margin-right: 4px; }
+.word { border: 1px solid color-mix(in srgb, var(--ask) 35%, var(--border)); background: var(--surface); color: var(--text); border-radius: 999px; padding: 1px 10px; font-size: 12.5px; cursor: pointer; text-decoration: none; }
+.word:hover { background: var(--ask-bg); }
+
+/* domain words in prose, and the one floating tip */
+.term { text-decoration: underline dotted color-mix(in srgb, var(--ask) 70%, transparent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; }
+.tip { position: fixed; z-index: 50; background: var(--text); color: var(--bg); font-size: 12.5px; line-height: 1.45; padding: 8px 10px; border-radius: 8px; box-shadow: var(--shadow); pointer-events: none; }
+.tip b { color: inherit; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.filter-chip { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 1px 10px; font-size: 12px; cursor: pointer; }
+.filter-chip.breaking { color: var(--breaking); border-color: var(--breaking); }
+.filter-chip.migration { color: var(--migration); border-color: var(--migration); }
+.filter-chip.additive { color: var(--additive); border-color: var(--additive); }
+
+/* canvas: a pannable, zoomable graph */
+.canvas-wrap { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.viewport { position: relative; height: 74vh; min-height: 480px; overflow: hidden; cursor: grab; touch-action: none;
+  background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 22px 22px; }
+.viewport.dragging { cursor: grabbing; }
+.viewport.dragging * { user-select: none; }
+.layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.layer > .card { position: absolute; width: 320px; visibility: hidden; z-index: 1; cursor: default; }
+.layer > .card.stub { width: 240px; }
+.wires { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.wires.under { z-index: 0; }
+.wires.over { z-index: 2; }
+.tools { position: absolute; top: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 4px; z-index: 3; }
+.tool { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 2px 9px; cursor: pointer; font-size: 12.5px; min-width: 28px; }
+.tool:hover { border-color: var(--accent); color: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 8px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); align-items: center; }
+.legend .hint { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.legend .hint::before { display: none; }
+.legend > span::before { content: ""; display: inline-block; width: 18px; height: 0; margin-right: 6px; vertical-align: 3px; border-top: 1.5px solid var(--muted); }
+.legend .lg-event::before { border-top-style: dashed; }
+.legend .lg-new::before { border-top-color: var(--additive); }
+.legend .lg-type::before { border-top-color: var(--type); border-top-style: dotted; border-top-width: 2px; }
+.legend .lg-route::before { border-top-color: var(--k-endpoint); border-top-width: 2px; }
+.legend .lg-tag::before { width: 10px; height: 10px; border: 0; border-radius: 2px; vertical-align: -1px; }
+.legend .lg-tag.breaking::before { background: var(--breaking); }
+.legend .lg-tag.migration::before { background: var(--migration); }
+.legend .lg-tag.additive::before { background: var(--additive); }
+
+/* cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); transition: opacity 0.15s; }
+.card.stub { border-style: dashed; background: color-mix(in srgb, var(--surface) 55%, transparent); box-shadow: none; }
+.card.selected, .card .selected { box-shadow: inset 0 0 0 2px var(--accent); }
+.card.tag-breaking { border-color: var(--breaking); box-shadow: 0 0 0 1px var(--breaking), var(--shadow); }
+.card.tag-migration { border-color: var(--migration); box-shadow: 0 0 0 1px var(--migration), var(--shadow); }
+.card.tag-additive { border-color: var(--additive); box-shadow: 0 0 0 1px var(--additive), var(--shadow); }
+.dim { opacity: 0.32; }
+.unfocused { opacity: 0.22; }
+.card-head { padding: 11px 13px 9px; cursor: grab; }
+.title { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.name { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+.purpose { color: var(--muted); font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.facts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.fact { font-size: 11px; color: var(--muted); background: var(--surface-2); border-radius: 4px; padding: 0 6px; }
+.fact b { color: var(--text); }
+.tally { display: inline-flex; gap: 3px; margin-left: auto; }
+.title .tally + .x { margin-left: 4px; }
+.dot { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; font-size: 11.5px; font-weight: 700; display: inline-grid; place-items: center; color: #fff; }
+.dot.breaking { background: var(--breaking); }
+.dot.migration { background: var(--migration); }
+.dot.additive { background: var(--additive); }
+@media (prefers-color-scheme: dark) { .dot { color: #141414; } }
+.listens { display: flex; flex-wrap: wrap; gap: 3px 5px; align-items: baseline; font-size: 12px; margin-top: 4px; }
+.listens-label { color: var(--muted); }
+.ev { font-family: var(--mono); font-size: 11px; color: var(--k-event); background: color-mix(in srgb, var(--k-event) 10%, transparent); border-radius: 4px; padding: 0 5px; }
+.linklike.quiet { color: var(--text); text-decoration-color: var(--border); font-weight: 600; }
+.src { font-family: var(--mono); font-size: 11px; color: var(--faint); margin: 3px 0; }
+.note { font-size: 12.5px; border-left: 2px solid var(--border); padding-left: 8px; color: var(--muted); margin: 5px 0; }
+.note.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+details.src summary { cursor: pointer; list-style: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+details.src summary::-webkit-details-marker { display: none; }
+
+/* groups inside a card, coloured by kind */
+.group { border-top: 1px solid var(--border); --k: var(--muted); }
+.group.k-endpoints { --k: var(--k-endpoint); }
+.group.k-contracts { --k: var(--k-contract); }
+.group.k-data { --k: var(--k-data); }
+.group.k-storage { --k: var(--k-storage); }
+.group.k-inside { --k: var(--k-inside); }
+.group.k-wiring, .group.k-signals, .group.k-tests { --k: var(--k-run); }
+.kind.k-port, .kind.k-signal, .kind.k-test { color: var(--k-run); }
+.run-chip.prose { font-family: var(--sans); text-align: left; }
+.run-chip { font: 500 11px/1.5 var(--mono); color: var(--text); background: color-mix(in srgb, var(--k-run) 13%, transparent); border: 0; border-radius: 4px; padding: 0 5px; margin: 0 3px 2px 0; cursor: pointer; }
+span.run-chip { cursor: default; }
+.env { font: 700 9.5px/1 var(--sans); text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 4px; border-radius: 3px; margin-left: 3px; color: var(--k-run); border: 1px solid color-mix(in srgb, var(--k-run) 45%, transparent); }
+.env.env-prod { color: var(--surface); background: var(--k-run); border-color: var(--k-run); }
+.warn-pill { font: 700 9.5px/1 var(--sans); text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 4px; border-radius: 3px; color: var(--k-run); border: 1px dashed var(--k-run); margin-right: 2px; }
+.adapters { display: grid; gap: 3px; margin: 6px 0; font-size: 12px; }
+.adapters .env { margin: 0 4px 0 0; display: inline-block; min-width: 38px; text-align: center; }
+.purpose-line { margin: 2px 0 6px; color: var(--muted); }
+.sig-type { flex: none; font: 700 9.5px/1 var(--sans); text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 0; width: 44px; text-align: center; border-radius: 3px; color: var(--k-run); border: 1px solid color-mix(in srgb, var(--k-run) 45%, transparent); }
+.sig-type.st-metric { color: var(--surface); background: var(--k-run); border-color: var(--k-run); }
+.alert { display: inline-flex; color: var(--k-run); }
+.alert .bell { stroke: currentColor; fill: none; }
+.test-summary { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 2px 13px 6px; font-size: 11px; }
+.lvl { font: 600 10px/1 var(--sans); padding: 3px 5px; border-radius: 3px; color: var(--k-run); background: color-mix(in srgb, var(--k-run) 13%, transparent); }
+.lvl-e2e, .lvl-contract { background: transparent; border: 1px solid color-mix(in srgb, var(--k-run) 45%, transparent); }
+.tstate { flex: none; width: 14px; text-align: center; font-size: 12px; color: var(--k-run); }
+.tstate.planned { color: var(--faint); }
+.test .row-name { white-space: normal; }
+.untested { font-size: 11px; color: var(--faint); font-style: italic; }
+.group-label { display: flex; align-items: center; gap: 6px; padding: 6px 13px 2px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--k); }
+.group-count { font-weight: 600; color: var(--faint); letter-spacing: 0; }
+.group .icon { stroke: var(--k); }
+.group > .row:first-of-type { border-top-color: transparent; }
+.more { display: block; width: 100%; border: 0; border-top: 1px dashed var(--border); background: none; color: var(--k); font-size: 12px; padding: 5px 13px; text-align: left; cursor: pointer; }
+
+.row { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.row-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 13px; background: none; border: 0; cursor: pointer; text-align: left; position: relative; min-height: 32px; }
+.row-head:hover { background: var(--surface-2); }
+.row-head[class*="mark-"]::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 4px; width: 4px; border-radius: 0 3px 3px 0; }
+.row-head.mark-breaking::before { background: var(--breaking); }
+.row-head.mark-migration::before { background: var(--migration); }
+.row-head.mark-additive::before { background: var(--additive); }
+.row-name { flex: 1; font-weight: 550; min-width: 0; }
+.row-name.mono { font-weight: 500; }
+.meta { font-size: 11.5px; color: var(--muted); }
+.meta.sub-purpose { flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.root { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--k-data); margin-right: 5px; }
+.chev { color: var(--faint); transition: transform 0.15s; }
+.row-head[aria-expanded="true"] .chev, .agg-head[aria-expanded="true"] .chev, .store-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.icon { fill: none; stroke: var(--muted); stroke-width: 1.4; flex: none; }
+.row-body { padding: 2px 13px 10px 13px; }
+.row.open > .row-head { background: color-mix(in srgb, var(--k) 6%, transparent); }
+
+/* endpoints */
+.endpoint .row-head { gap: 7px; }
+.verb { flex: none; font: 700 10px/1 var(--mono); letter-spacing: 0.02em; padding: 4px 5px; border-radius: 4px; min-width: 42px; text-align: center; color: #fff; background: var(--k-endpoint); }
+.v-get { background: #1971c2; }
+.v-post { background: #0b7285; }
+.v-put, .v-patch { background: #5f3dc4; }
+.v-delete { background: #a61e4d; }
+.v-trpc, .v-grpc, .v-graphql, .v-queue, .v-cli { background: transparent; color: var(--k-endpoint); border: 1px solid var(--k-endpoint); }
+@media (prefers-color-scheme: dark) {
+  .v-get { background: #74c0fc; color: #10202e; }
+  .v-post { background: #3bc9db; color: #0c2226; }
+  .v-put, .v-patch { background: #b197fc; color: #1e1530; }
+  .v-delete { background: #f783ac; color: #2f1220; }
+  .v-trpc, .v-grpc, .v-graphql, .v-queue, .v-cli { background: transparent; color: var(--k-endpoint); }
+}
+.path { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; overflow-wrap: break-word; line-height: 1.35; }
+.param { color: var(--k-endpoint); font-weight: 600; }
+.aud { flex: none; display: inline-flex; align-items: center; color: var(--faint); }
+.aud.a-public { color: var(--k-endpoint); }
+.icon.lock { stroke: currentColor; }
+.op-chip, .ep-chip { font-family: var(--mono); font-size: 11.5px; border-radius: 4px; padding: 0 5px; cursor: pointer; border: 1px solid transparent; }
+.op-chip { color: var(--k-contract); background: color-mix(in srgb, var(--k-contract) 11%, transparent); }
+.ep-chip { color: var(--k-endpoint); background: color-mix(in srgb, var(--k-endpoint) 11%, transparent); margin: 0 3px 2px 0; }
+.op-chip:hover, .ep-chip:hover { border-color: currentColor; }
+.callers { font-size: 11.5px; margin-top: 2px; }
+
+/* contracts */
+.member { padding: 6px 8px; margin: 0 -8px; border-radius: 6px; cursor: pointer; }
+.member:hover { background: var(--surface-2); }
+.sig { font-family: var(--mono); font-size: 12px; line-height: 1.7; word-break: break-word; }
+.mname { font-weight: 700; }
+.arrow { color: var(--faint); }
+.fname { color: var(--muted); }
+.prim { color: var(--text); }
+.mode { font-family: var(--sans); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 4px; padding: 0 4px; }
+.mode.command { color: var(--k-contract); background: color-mix(in srgb, var(--k-contract) 12%, transparent); }
+.mode.query { color: var(--k-contract); border: 1px solid color-mix(in srgb, var(--k-contract) 40%, transparent); }
+.mode.event { color: var(--k-event); background: color-mix(in srgb, var(--k-event) 11%, transparent); }
+.errs { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+.err { font-family: var(--mono); font-size: 10.5px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.err::before { content: "! "; color: var(--faint); }
+
+.chip { font-family: var(--mono); font-size: 12px; color: var(--type); background: var(--type-soft); border: 1px solid transparent; border-radius: 4px; padding: 0 4px; cursor: pointer; }
+.chip:hover, .chip.hot-type { border-color: var(--type); }
+.chip.linked { border-color: color-mix(in srgb, var(--type) 45%, transparent); }
+.types { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.type-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 12px; }
+.typecard { border: 1px solid color-mix(in srgb, var(--type) 40%, var(--border)); border-left: 3px solid var(--type); border-radius: 6px; padding: 6px 8px; background: var(--surface); }
+.typecard.hot-type, .row.hot-type { box-shadow: 0 0 0 2px var(--type-soft); }
+.type-head { display: flex; justify-content: space-between; align-items: center; }
+.type-name { background: none; border: 0; padding: 0; font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--type); cursor: pointer; }
+.fields { font-family: var(--mono); font-size: 12px; line-height: 1.75; }
+.key { font-family: var(--sans); font-size: 10px; font-weight: 700; color: var(--k-data); margin-left: 6px; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
+.values { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.value { font-family: var(--mono); font-size: 11.5px; border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; }
+.aux { font-size: 12px; color: var(--text); display: flex; flex-wrap: wrap; gap: 3px 5px; align-items: center; margin: 6px 0 2px; }
+.aux-label { color: var(--muted); }
+.has-facts { flex: none; font-size: 10px; font-weight: 700; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.pill { font-size: 11px; background: var(--surface-2); border-radius: 999px; padding: 0 7px; }
+
+/* aggregates: a consistency boundary around the tables it holds */
+.aggregate { margin: 6px 10px 8px; border: 1.5px dashed color-mix(in srgb, var(--k-data) 55%, transparent); border-radius: 9px; overflow: hidden; }
+.aggregate .row:first-of-type { border-top-color: transparent; }
+.agg-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 10px; background: none; border: 0; cursor: pointer; text-align: left; font-size: 11px; color: var(--k-data); }
+.agg-head:hover { background: var(--surface-2); }
+.agg-label { flex: 1; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+.invariants { margin: 2px 10px 8px; padding-left: 20px; font-size: 12px; }
+.invariants li { margin: 3px 0; }
+.invariants li::marker { color: var(--k-data); font-weight: 700; }
+.aggregate > .changes { padding: 0 10px; }
+
+/* storage */
+.store { margin: 6px 10px 8px; border: 1px solid color-mix(in srgb, var(--k-storage) 35%, var(--border)); border-radius: 9px; overflow: hidden; }
+.store-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; background: color-mix(in srgb, var(--k-storage) 6%, transparent); border: 0; cursor: pointer; text-align: left; }
+.store-name { flex: 1; font-weight: 600; font-size: 13px; }
+.engine { flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; padding: 1px 6px; border-radius: 4px; color: #fff; background: var(--k-storage); }
+.e-postgres { background: #336791; }
+.e-dynamodb { background: #3b48cc; }
+.e-mysql { background: #00758f; }
+.e-redis { background: #a51d2d; }
+.e-s3 { background: #3f8624; }
+@media (prefers-color-scheme: dark) { .engine { filter: brightness(1.25); } }
+.store .row { --k: var(--k-storage); }
+.store > .note { margin: 6px 10px; }
+.scan-count { flex: none; font-size: 10.5px; font-weight: 700; color: var(--migration); background: var(--migration-bg); border-radius: 4px; padding: 0 5px; }
+.cols { border-collapse: collapse; width: 100%; margin: 4px 0 6px; }
+.cols td { padding: 1px 8px 1px 0; vertical-align: baseline; }
+.cols tr + tr td { border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+.ctype { color: var(--k-storage); }
+.pk { font-family: var(--sans); font-size: 9.5px; font-weight: 700; color: var(--k-data); border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; margin-right: 5px; }
+.index { padding: 4px 0; border-top: 1px dashed var(--border); }
+.idx-kind { font-family: var(--sans); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--k-storage); margin-right: 4px; }
+.kv { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.serves { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.tick { color: var(--additive); font-weight: 700; margin-right: 4px; }
+.scans { margin-top: 6px; font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+.store-link { border: 0; background: none; padding: 0; cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--text); display: inline-flex; gap: 2px; align-items: center; }
+.store-link:hover { text-decoration: underline; }
+
+/* sub-modules: rows that open into a card nested inside the parent */
+.nested { padding: 8px 10px 10px; border-top: 1px solid var(--border); background: var(--surface-2); }
+.nested > .card { box-shadow: none; }
+.title .x { margin-left: auto; }
+
+.flash { animation: flash 0.9s ease-out; }
+@keyframes flash { from { box-shadow: 0 0 0 4px var(--accent-soft), 0 0 0 2px var(--accent); } }
+
+/* changes, shown on the node they affect */
+.changes { list-style: none; padding: 0; margin: 6px 0 2px; font-size: 12px; }
+.changes li { padding: 2px 0; display: flex; gap: 6px; align-items: baseline; }
+.changes li.internal { color: var(--muted); }
+.row > .changes, .store > .changes { padding: 0 13px 6px; margin-top: 0; }
+.tag { flex: none; font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 4px; }
+.tag.breaking { color: var(--breaking); background: var(--breaking-bg); }
+.tag.migration { color: var(--migration); background: var(--migration-bg); }
+.tag.additive { color: var(--additive); background: var(--additive-bg); }
+.tag.internal { color: var(--muted); background: var(--surface-2); }
+
+/* wires */
+.wire { fill: none; stroke: var(--muted); stroke-width: 1.3; opacity: 0.75; }
+.wire.event { stroke: var(--k-event); stroke-dasharray: 5 4; opacity: 0.6; }
+.wire.type { stroke: var(--type); stroke-dasharray: 2 3; stroke-width: 1.4; opacity: 0.55; }
+.wire.new { stroke: var(--additive); opacity: 1; stroke-width: 1.8; }
+.wire.hot { stroke: var(--accent); stroke-width: 2.2; opacity: 1; }
+.wire.event.hot { stroke: var(--k-event); }
+.wire.route.hot { stroke: var(--k-endpoint); stroke-width: 2; }
+.wire.type.hot { stroke: var(--type); stroke-dasharray: none; }
+.wire.faded { opacity: 0.1; }
+.ah { fill: var(--muted); }
+.ah.hot { fill: var(--accent); }
+.ah.route { fill: var(--k-endpoint); }
+
+/* context below the canvas */
+.context { max-width: 1000px; margin-top: 16px; }
+details.ctx { border-top: 1px solid var(--border); }
+details.ctx > summary { list-style: none; cursor: pointer; padding: 4px 0; }
+details.ctx > summary::-webkit-details-marker { display: none; }
+details.ctx > summary h2 { display: inline-flex; gap: 8px; align-items: center; margin: 10px 0; }
+details.ctx > summary h2::before { content: "›"; color: var(--muted); transition: transform 0.15s; display: inline-block; }
+details.ctx[open] > summary h2::before { transform: rotate(90deg); }
+details.ctx[open] { padding-bottom: 14px; }
+.count { font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; }
+details.ctx.asks > summary h2 { color: var(--ask); }
+details.ctx.asks .count { color: var(--ask); border-color: var(--ask); }
+.qs { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; counter-reset: q; }
+.qs li { counter-increment: q; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--ask); border-radius: 10px; padding: 10px 14px; }
+.q { font-size: 14.5px; font-weight: 600; }
+.q::before { content: counter(q) ". "; color: var(--ask); }
+.options { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.option { font-size: 12.5px; border: 1px solid color-mix(in srgb, var(--ask) 40%, var(--border)); background: var(--ask-bg); border-radius: 999px; padding: 1px 10px; }
+.node-link { border: 0; background: none; padding: 0; cursor: pointer; font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.node-link::before { content: "↗ "; }
+.node-link:hover { color: var(--accent); }
+.phases { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.phase { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.phase h3 { display: flex; align-items: center; gap: 8px; }
+.phase .tally { margin-left: auto; }
+.phase.active { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
+.ds { list-style: none; padding: 0; display: grid; gap: 10px; margin: 0; }
+.ds li { border-left: 3px solid var(--border); padding: 2px 0 2px 12px; }
+.d { font-weight: 600; }
+.why { color: var(--muted); font-size: 13px; }
+.why-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
+.diag { padding: 8px 12px; border-left: 3px solid var(--breaking); background: var(--surface); border-radius: 0 8px 8px 0; margin: 6px 0; font-size: 13px; }
+.diag.warning { border-color: var(--migration); }
+.glossary { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; }
+.glossary dt { font-weight: 700; }
+.glossary dd { margin: 0; color: var(--muted); }
+
+/* conversation sidebar */
+.chat { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+.chat-head { padding: 14px 16px 10px; font-weight: 700; border-bottom: 1px solid var(--border); }
+.msgs { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.empty { color: var(--muted); font-size: 12.5px; margin: 0; }
+.msg { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+.msg.queued { border: 1px dashed var(--border); background: transparent; }
+.who { display: flex; justify-content: space-between; gap: 6px; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+.composer { border-top: 1px solid var(--border); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.about { font-size: 12px; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.composer textarea { width: 100%; resize: vertical; font: inherit; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
+@media (prefers-color-scheme: dark) { .btn { color: #10152a; } }
+.btn.quiet { background: transparent; color: var(--accent); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+/* phones */
+@media (max-width: 900px) {
+  .chat { position: static; height: auto; border-left: 0; border-top: 1px solid var(--border); }
+  .viewport { height: 62vh; min-height: 380px; }
+  .legend .hint { margin-left: 0; }
+  .controls, .search, .search input { width: 100%; }
+  .tile { min-width: 0; flex: 1 1 88px; }
+}
+
+/* gaps: where the code differs from the model */
+.gaps { display: grid; gap: 3px; margin: 6px 0 0; }
+.gap { font-size: 11.5px; line-height: 1.4; padding: 4px 7px; border: 1px dashed var(--border-strong, var(--faint)); border-radius: 6px; color: var(--muted); }
+.gap-label { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); margin-right: 5px; }
+.gap .linklike { font-weight: 600; color: var(--text); }
+.gap-note { display: block; }
+
+</style>
+</head>
+<body>
+<noscript><p class="noscript">This plan is drawn by an inline script. The plan data is in the #plan-doc block of this file.</p></noscript>
+<div id="app"></div>
+<script type="application/json" id="plan-doc">{"format":"plan-doc/1","title":"seams, mapped with seams","intent":"Use seams on its own repo to see what can be made better.","mode":"learn","current":{"kind":"plan","name":"seams","modules":[{"kind":"module","name":"Model","purpose":"The plan's node types, the helpers plans are written with, stable node ids, and the tree walk every other part uses.","depth":"mapped","sources":[{"path":"src/ast.ts"},{"path":"src/dsl.ts"},{"path":"src/ids.ts"},{"path":"src/walk.ts"},{"path":"src/doc.ts"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Model","sources":[{"path":"src/ast.ts","symbol":"Plan"},{"path":"src/doc.ts","symbol":"PlanDocument"}],"note":"The contract is the types themselves: every other module imports ast.ts and doc.ts directly.","types":[{"kind":"record","name":"Plan","fields":[{"name":"name","type":{"kind":"prim","name":"string"}}]},{"kind":"record","name":"PlanDocument","fields":[{"name":"title","type":{"kind":"prim","name":"string"}}]},{"kind":"record","name":"Placed","fields":[{"name":"path","type":{"kind":"prim","name":"string"}}]}],"operations":[{"kind":"operation","name":"Walk","mode":"query","input":[{"name":"plan","type":{"kind":"ref","name":"Model.Plan"}}],"output":{"kind":"ref","name":"Placed"},"errors":[],"sources":[{"path":"src/walk.ts","symbol":"walk","line":9}]}],"events":[]}],"uses":[],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"gaps":[],"modules":[]},{"kind":"module","name":"Storage","purpose":"Decides which key or index serves each lookup, and what column type a field gets.","depth":"mapped","sources":[{"path":"src/storage.ts"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Storage","types":[{"kind":"record","name":"Access","fields":[{"name":"label","type":{"kind":"prim","name":"string"}},{"name":"servedBy","type":{"kind":"optional","of":{"kind":"prim","name":"string"}}}]}],"operations":[{"kind":"operation","name":"AccessPatterns","mode":"query","input":[{"name":"module","type":{"kind":"ref","name":"Model.Plan"}}],"output":{"kind":"ref","name":"Access"},"errors":[],"sources":[{"path":"src/storage.ts","symbol":"accessPatterns","line":27}]},{"kind":"operation","name":"SqlType","mode":"query","input":[{"name":"type","type":{"kind":"ref","name":"Model.Plan"}}],"output":{"kind":"prim","name":"string"},"errors":[],"sources":[{"path":"src/storage.ts","symbol":"sqlType","line":87}]}],"events":[]}],"uses":[{"contract":"Model","subscribes":[]}],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"gaps":[],"modules":[]},{"kind":"module","name":"Rules","purpose":"The checker: whether a plan is consistent with itself. Boundaries, cycles, storage, endpoints, wiring, signals, tests.","depth":"mapped","sources":[{"path":"src/check.ts"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Rules","types":[{"kind":"record","name":"Diagnostic","fields":[{"name":"level","type":{"kind":"prim","name":"string"}},{"name":"at","type":{"kind":"prim","name":"string"}},{"name":"message","type":{"kind":"prim","name":"string"}}]}],"operations":[{"kind":"operation","name":"Check","mode":"query","input":[{"name":"plan","type":{"kind":"ref","name":"Model.Plan"}}],"output":{"kind":"ref","name":"Diagnostic"},"errors":[],"sources":[{"path":"src/check.ts","symbol":"check","line":49}]},{"kind":"operation","name":"IndexPlan","mode":"query","input":[{"name":"plan","type":{"kind":"ref","name":"Model.Plan"}}],"output":{"kind":"ref","name":"Model.Plan"},"errors":[],"sources":[{"path":"src/check.ts","symbol":"indexPlan","line":17}]},{"kind":"operation","name":"DependencyGraph","mode":"query","input":[{"name":"plan","type":{"kind":"ref","name":"Model.Plan"}}],"output":{"kind":"ref","name":"Model.Plan"},"errors":[],"sources":[{"path":"src/check.ts","symbol":"dependencyGraph","line":36}]}],"events":[]}],"uses":[{"contract":"Model","subscribes":[]},{"contract":"Storage","subscribes":[]}],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"gaps":[],"modules":[]},{"kind":"module","name":"Verify","purpose":"Holds one tree of a plan to a repository: sources, imports between module folders, the Prisma schema, operations.","depth":"mapped","sources":[{"path":"src/verify.ts"}],"entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Verify","types":[{"kind":"record","name":"Finding","fields":[{"name":"level","type":{"kind":"prim","name":"string"}},{"name":"at","type":{"kind":"prim","name":"string"}},{"name":"message","type":{"kind":"prim","name":"string"}}]}],"operations":[{"kind":"operation","name":"Verify","mode":"query","input":[{"name":"plan","type":{"kind":"ref","name":"Model.Plan"}},{"name":"root","type":{"kind":"prim","name":"string"}}],"output":{"kind":"ref","name":"Finding"},"errors":[],"sources":[{"path":"src/verify.ts","symbol":"verify","line":26}]}],"events":[]}],"uses":[{"contract":"Model","subscribes":[]},{"contract":"Rules","subscribes":[]}],"stores":[],"endpoints":[],"ports":[{"kind":"port","name":"Files","purpose":"Reads the repository being verified.","methods":["readdirSync","readFileSync","statSync"],"injected":false,"sources":[{"path":"src/verify.ts","symbol":"Repo"}],"note":"Repo wraps node:fs directly; a test needs a fixture folder on disk.","adapters":[{"name":"node:fs","env":"prod"}]}],"signals":[],"tests":[],"gaps":[],"modules":[]},{"kind":"module","name":"Views","purpose":"Everything derived from a plan as text: the cost-tagged diff, the agent outline, the code skeleton, the spec and Mermaid diagrams.","depth":"mapped","sources":[{"path":"src/views/"}],"note":"diff.ts borrows typeLabel from mermaid.ts. There are four type printers: mermaid typeLabel, outline ts(), viewmodel toks() and the skeleton's Scope.ts().","entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Views","types":[{"kind":"record","name":"Change","fields":[{"name":"tag","type":{"kind":"prim","name":"string"}},{"name":"what","type":{"kind":"prim","name":"string"}},{"name":"node","type":{"kind":"prim","name":"string"}}]}],"operations":[{"kind":"operation","name":"Diff","mode":"query","input":[{"name":"before","type":{"kind":"ref","name":"Model.Plan"}},{"name":"after","type":{"kind":"ref","name":"Model.Plan"}}],"output":{"kind":"ref","name":"Change"},"errors":[],"sources":[{"path":"src/views/diff.ts","symbol":"diff","line":19}]},{"kind":"operation","name":"Outline","mode":"query","input":[{"name":"doc","type":{"kind":"ref","name":"Model.PlanDocument"}}],"output":{"kind":"prim","name":"string"},"errors":[],"sources":[{"path":"src/views/outline.ts","symbol":"outline","line":21}]},{"kind":"operation","name":"Skeleton","mode":"query","input":[{"name":"plan","type":{"kind":"ref","name":"Model.Plan"}}],"output":{"kind":"prim","name":"string"},"errors":[],"sources":[{"path":"src/views/skeleton.ts","symbol":"skeleton","line":45}]},{"kind":"operation","name":"Spec","mode":"query","input":[{"name":"plan","type":{"kind":"ref","name":"Model.Plan"}}],"output":{"kind":"prim","name":"string"},"errors":[],"sources":[{"path":"src/views/spec.ts","symbol":"spec","line":9}]},{"kind":"operation","name":"SystemDiagram","mode":"query","input":[{"name":"plan","type":{"kind":"ref","name":"Model.Plan"}}],"output":{"kind":"prim","name":"string"},"errors":[],"sources":[{"path":"src/views/mermaid.ts","symbol":"systemDiagram","line":8}]}],"events":[]}],"uses":[{"contract":"Model","subscribes":[]},{"contract":"Rules","subscribes":[]},{"contract":"Storage","subscribes":[]}],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"gaps":[],"modules":[]},{"kind":"module","name":"Page","purpose":"Turns a document into one self-contained HTML page, and reads the document back out of it.","depth":"mapped","sources":[{"path":"src/render/"}],"note":"client.js is about 1,300 lines of hand-written DOM code with no tests; viewmodel.ts precomputes everything it draws.","entities":[],"aggregates":[],"repositories":[],"provides":[{"kind":"contract","name":"Page","types":[],"operations":[{"kind":"operation","name":"RenderDocument","mode":"query","input":[{"name":"doc","type":{"kind":"ref","name":"Model.PlanDocument"}}],"output":{"kind":"prim","name":"string"},"errors":[],"sources":[{"path":"src/render/render.ts","symbol":"renderDocument","line":18}]},{"kind":"operation","name":"ReadDocument","mode":"query","input":[{"name":"html","type":{"kind":"ref","name":"Model.Plan"}}],"output":{"kind":"ref","name":"Model.PlanDocument"},"errors":[],"sources":[{"path":"src/render/render.ts","symbol":"readDocument","line":47}]}],"events":[]}],"uses":[{"contract":"Model","subscribes":[]},{"contract":"Rules","subscribes":[]},{"contract":"Views","subscribes":[]},{"contract":"Storage","subscribes":[]}],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"gaps":[],"modules":[]},{"kind":"module","name":"Cli","purpose":"The seams command. Loads a document from .ts, .json or .html and calls the other modules.","depth":"mapped","sources":[{"path":"src/cli.ts"},{"path":"install.sh"}],"entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[{"contract":"Model","subscribes":[]},{"contract":"Rules","subscribes":[]},{"contract":"Page","subscribes":[]},{"contract":"Views","subscribes":[]},{"contract":"Verify","subscribes":[]}],"stores":[],"endpoints":[{"kind":"endpoint","protocol":"cli","path":"seams new","name":"seams new","calls":["Model.Walk"],"auth":"none","audience":"public","sources":[{"path":"src/cli.ts","symbol":"\"new\""}]},{"kind":"endpoint","protocol":"cli","path":"seams where","name":"seams where","calls":["Model.Walk"],"auth":"none","audience":"public","sources":[{"path":"src/cli.ts","symbol":"\"where\""}]},{"kind":"endpoint","protocol":"cli","path":"seams update","name":"seams update","calls":["Model.Walk"],"auth":"none","audience":"public","sources":[{"path":"src/cli.ts","symbol":"\"update\""}]},{"kind":"endpoint","protocol":"cli","path":"seams render","name":"seams render","calls":["Page.RenderDocument"],"auth":"none","audience":"public","sources":[{"path":"src/cli.ts","symbol":"\"render\""}]},{"kind":"endpoint","protocol":"cli","path":"seams check","name":"seams check","calls":["Rules.Check"],"auth":"none","audience":"public","sources":[{"path":"src/cli.ts","symbol":"\"check\""}]},{"kind":"endpoint","protocol":"cli","path":"seams read","name":"seams read","calls":["Page.ReadDocument"],"auth":"none","audience":"public","sources":[{"path":"src/cli.ts","symbol":"\"read\""}]},{"kind":"endpoint","protocol":"cli","path":"seams verify","name":"seams verify","calls":["Verify.Verify"],"auth":"none","audience":"public","sources":[{"path":"src/cli.ts","symbol":"\"verify\""}]}],"ports":[{"kind":"port","name":"Git","purpose":"Pulls the latest version for `seams update`.","methods":["pull --ff-only","rev-parse --short HEAD"],"injected":false,"sources":[{"path":"src/cli.ts","symbol":"execFileSync"}],"adapters":[{"name":"git (execFileSync)","env":"prod"}]}],"signals":[],"tests":[],"gaps":[],"modules":[]},{"kind":"module","name":"Skill","purpose":"Tells the agent how to map a repo into a plan, check it, verify it and build from it.","depth":"stub","sources":[{"path":"skills/seams/SKILL.md"}],"entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"modules":[]},{"kind":"module","name":"Examples","purpose":"The worked shop example and the Documenso plan, and run.ts which regenerates out/.","depth":"stub","sources":[{"path":"examples/"},{"path":"plans/documenso-delegation.plan.ts"},{"path":"run.ts"}],"entities":[],"aggregates":[],"repositories":[],"provides":[],"uses":[{"contract":"Rules","subscribes":[]},{"contract":"Views","subscribes":[]},{"contract":"Page","subscribes":[]}],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"modules":[]}]},"slices":[],"questions":[],"decisions":[],"facts":{"Page":[{"label":"client.js lines","value":1233,"detail":"wc -l src/render/client.js"},{"label":"tests","value":0,"detail":"no test files in the repo"}],"Model":[{"label":"`?? []` fallbacks outside dsl.ts","value":57,"detail":"grep -c '?? \\[\\]' src/**/*.ts, minus dsl.ts. Optional module fields (ports, signals, tests, gaps) are defended everywhere they are read."}],"Views":[{"label":"type printers","value":4,"detail":"mermaid typeLabel, outline ts(), viewmodel toks(), skeleton Scope.ts()"}],"Rules":[{"label":"tests","value":0,"detail":"rules are exercised only by run.ts on the examples"}],"Verify":[{"label":"tests","value":0,"detail":"checked by hand against Documenso and this repo"}]}}</script>
+<script type="text/plain" id="plan-outline">
+# plan: seams, mapped with seams (learn)
+# intent: Use seams on its own repo to see what can be made better.
+# describes: the system as it is
+#
+# rules the code must follow:
+# - a module touches only its own tables; other modules' data is reached through their contract
+# - a module calls only contracts listed in its `uses` line
+# - contract types never expose a table type
+# - each contract operation, event and type exists in code with this shape; `!` lists the errors it can return
+# - a sub-module (indented module) is internal to its parent: only the parent and its siblings may use its contract
+# - an aggregate is loaded and saved whole through its root; its other tables have no repository of their own,
+#   and the invariants listed under it hold whenever it is saved
+# - a store lists the physical tables a module owns; each `served by` is the key or index a lookup must use,
+#   and `SCAN` marks a lookup with none
+# - an endpoint only parses, authorises (`auth`) and calls the operations after `->`; no logic of its own
+# - a gap is a dependency the code has and the model leaves out; do not add new ones, and remove one when the code stops needing it
+# - after building, `seams verify <plan> --tree proposed` must pass; if the code had to differ, change the plan, not just the code
+# - a port is an interface the module owns and receives as a dependency; never import its adapter directly
+# - each signal is emitted where `on` says, with exactly the listed fields; no secrets, and metric labels stay low-cardinality
+# - each test proves what `covers` names, replacing only what `fakes` names; tests marked (planned) are to be written
+# - [stub] modules are named only; their insides are not specified
+
+module [Model] — The plan's node types, the helpers plans are written with, stable node ids, and the tree walk every other part uses.
+  src: src/ast.ts, src/dsl.ts, src/ids.ts, src/walk.ts, src/doc.ts
+  uses: nothing
+  contract [Model/contract/Model]
+    type [Model/contract/Model/type/Plan] = { name: string }
+    type [Model/contract/Model/type/PlanDocument] = { title: string }
+    type [Model/contract/Model/type/Placed] = { path: string }
+    query [Model/contract/Model/Walk] (plan: Model.Plan) => Placed
+module [Storage] — Decides which key or index serves each lookup, and what column type a field gets.
+  src: src/storage.ts
+  uses: Model
+  contract [Storage/contract/Storage]
+    type [Storage/contract/Storage/type/Access] = { label: string, servedBy: string | null }
+    query [Storage/contract/Storage/AccessPatterns] (module: Model.Plan) => Access
+    query [Storage/contract/Storage/SqlType] (type: Model.Plan) => string
+module [Rules] — The checker: whether a plan is consistent with itself. Boundaries, cycles, storage, endpoints, wiring, signals, tests.
+  src: src/check.ts
+  uses: Model; Storage
+  contract [Rules/contract/Rules]
+    type [Rules/contract/Rules/type/Diagnostic] = { level: string, at: string, message: string }
+    query [Rules/contract/Rules/Check] (plan: Model.Plan) => Diagnostic
+    query [Rules/contract/Rules/IndexPlan] (plan: Model.Plan) => Model.Plan
+    query [Rules/contract/Rules/DependencyGraph] (plan: Model.Plan) => Model.Plan
+module [Verify] — Holds one tree of a plan to a repository: sources, imports between module folders, the Prisma schema, operations.
+  src: src/verify.ts
+  uses: Model; Rules
+  contract [Verify/contract/Verify]
+    type [Verify/contract/Verify/type/Finding] = { level: string, at: string, message: string }
+    query [Verify/contract/Verify/Verify] (plan: Model.Plan, root: string) => Finding
+  port [Verify/port/Files] [imported directly] readdirSync; readFileSync; statSync adapters prod=node:fs — Reads the repository being verified.
+module [Views] — Everything derived from a plan as text: the cost-tagged diff, the agent outline, the code skeleton, the spec and Mermaid diagrams.
+  src: src/views/
+  note: diff.ts borrows typeLabel from mermaid.ts. There are four type printers: mermaid typeLabel, outline ts(), viewmodel toks() and the skeleton's Scope.ts().
+  uses: Model; Rules; Storage
+  contract [Views/contract/Views]
+    type [Views/contract/Views/type/Change] = { tag: string, what: string, node: string }
+    query [Views/contract/Views/Diff] (before: Model.Plan, after: Model.Plan) => Change
+    query [Views/contract/Views/Outline] (doc: Model.PlanDocument) => string
+    query [Views/contract/Views/Skeleton] (plan: Model.Plan) => string
+    query [Views/contract/Views/Spec] (plan: Model.Plan) => string
+    query [Views/contract/Views/SystemDiagram] (plan: Model.Plan) => string
+module [Page] — Turns a document into one self-contained HTML page, and reads the document back out of it.
+  src: src/render/
+  note: client.js is about 1,300 lines of hand-written DOM code with no tests; viewmodel.ts precomputes everything it draws.
+  uses: Model; Rules; Views; Storage
+  contract [Page/contract/Page]
+    query [Page/contract/Page/RenderDocument] (doc: Model.PlanDocument) => string
+    query [Page/contract/Page/ReadDocument] (html: Model.Plan) => Model.PlanDocument
+module [Cli] — The seams command. Loads a document from .ts, .json or .html and calls the other modules.
+  src: src/cli.ts, install.sh
+  uses: Model; Rules; Page; Views; Verify
+  endpoint [Cli/endpoint/seams new] cli seams new auth(public, none) -> Model.Walk
+  endpoint [Cli/endpoint/seams where] cli seams where auth(public, none) -> Model.Walk
+  endpoint [Cli/endpoint/seams update] cli seams update auth(public, none) -> Model.Walk
+  endpoint [Cli/endpoint/seams render] cli seams render auth(public, none) -> Page.RenderDocument
+  endpoint [Cli/endpoint/seams check] cli seams check auth(public, none) -> Rules.Check
+  endpoint [Cli/endpoint/seams read] cli seams read auth(public, none) -> Page.ReadDocument
+  endpoint [Cli/endpoint/seams verify] cli seams verify auth(public, none) -> Verify.Verify
+  port [Cli/port/Git] [imported directly] pull --ff-only; rev-parse --short HEAD adapters prod=git (execFileSync) — Pulls the latest version for `seams update`.
+module [Skill] [stub] — Tells the agent how to map a repo into a plan, check it, verify it and build from it.
+  src: skills/seams/SKILL.md
+  uses: nothing
+module [Examples] [stub] — The worked shop example and the Documenso plan, and run.ts which regenerates out/.
+  src: examples/, plans/documenso-delegation.plan.ts, run.ts
+  uses: Rules; Views; Page
+</script>
+<script type="application/json" id="plan-view">{"current":{"modules":[{"id":"Model","name":"Model","purpose":"The plan's node types, the helpers plans are written with, stable node ids, and the tree walk every other part uses.","depth":"mapped","sources":["src/ast.ts","src/dsl.ts","src/ids.ts","src/walk.ts","src/doc.ts"],"usedBy":["Storage","Rules","Verify","Views","Page","Cli"],"contracts":[{"id":"Model/contract/Model","name":"Model","note":"The contract is the types themselves: every other module imports ast.ts and doc.ts directly.","sources":["src/ast.ts (Plan)","src/doc.ts (PlanDocument)"],"types":[{"id":"Model/contract/Model/type/Plan","name":"Plan","kind":"record","fields":[{"name":"name","type":[{"s":"string"}]}]},{"id":"Model/contract/Model/type/PlanDocument","name":"PlanDocument","kind":"record","fields":[{"name":"title","type":[{"s":"string"}]}]},{"id":"Model/contract/Model/type/Placed","name":"Placed","kind":"record","fields":[{"name":"path","type":[{"s":"string"}]}]}],"operations":[{"id":"Model/contract/Model/Walk","name":"Walk","mode":"query","input":[{"name":"plan","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]}],"output":[{"s":"Placed","ref":"Model/contract/Model/type/Placed"}],"errors":[]}],"events":[]}],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"gaps":[],"modules":[]},{"id":"Storage","name":"Storage","purpose":"Decides which key or index serves each lookup, and what column type a field gets.","depth":"mapped","sources":["src/storage.ts"],"usedBy":["Rules","Views","Page"],"contracts":[{"id":"Storage/contract/Storage","name":"Storage","sources":[],"types":[{"id":"Storage/contract/Storage/type/Access","name":"Access","kind":"record","fields":[{"name":"label","type":[{"s":"string"}]},{"name":"servedBy","type":[{"s":"string"},{"s":"?"}]}]}],"operations":[{"id":"Storage/contract/Storage/AccessPatterns","name":"AccessPatterns","mode":"query","input":[{"name":"module","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]}],"output":[{"s":"Access","ref":"Storage/contract/Storage/type/Access"}],"errors":[]},{"id":"Storage/contract/Storage/SqlType","name":"SqlType","mode":"query","input":[{"name":"type","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]}],"output":[{"s":"string"}],"errors":[]}],"events":[]}],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"gaps":[],"modules":[]},{"id":"Rules","name":"Rules","purpose":"The checker: whether a plan is consistent with itself. Boundaries, cycles, storage, endpoints, wiring, signals, tests.","depth":"mapped","sources":["src/check.ts"],"usedBy":["Verify","Views","Page","Cli","Examples"],"contracts":[{"id":"Rules/contract/Rules","name":"Rules","sources":[],"types":[{"id":"Rules/contract/Rules/type/Diagnostic","name":"Diagnostic","kind":"record","fields":[{"name":"level","type":[{"s":"string"}]},{"name":"at","type":[{"s":"string"}]},{"name":"message","type":[{"s":"string"}]}]}],"operations":[{"id":"Rules/contract/Rules/Check","name":"Check","mode":"query","input":[{"name":"plan","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]}],"output":[{"s":"Diagnostic","ref":"Rules/contract/Rules/type/Diagnostic"}],"errors":[]},{"id":"Rules/contract/Rules/IndexPlan","name":"IndexPlan","mode":"query","input":[{"name":"plan","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]}],"output":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}],"errors":[]},{"id":"Rules/contract/Rules/DependencyGraph","name":"DependencyGraph","mode":"query","input":[{"name":"plan","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]}],"output":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}],"errors":[]}],"events":[]}],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"gaps":[],"modules":[]},{"id":"Verify","name":"Verify","purpose":"Holds one tree of a plan to a repository: sources, imports between module folders, the Prisma schema, operations.","depth":"mapped","sources":["src/verify.ts"],"usedBy":["Cli"],"contracts":[{"id":"Verify/contract/Verify","name":"Verify","sources":[],"types":[{"id":"Verify/contract/Verify/type/Finding","name":"Finding","kind":"record","fields":[{"name":"level","type":[{"s":"string"}]},{"name":"at","type":[{"s":"string"}]},{"name":"message","type":[{"s":"string"}]}]}],"operations":[{"id":"Verify/contract/Verify/Verify","name":"Verify","mode":"query","input":[{"name":"plan","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]},{"name":"root","type":[{"s":"string"}]}],"output":[{"s":"Finding","ref":"Verify/contract/Verify/type/Finding"}],"errors":[]}],"events":[]}],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"ports":[{"id":"Verify/port/Files","name":"Files","purpose":"Reads the repository being verified.","methods":["readdirSync","readFileSync","statSync"],"injected":false,"adapters":[{"name":"node:fs","env":"prod"}],"note":"Repo wraps node:fs directly; a test needs a fixture folder on disk.","sources":["src/verify.ts (Repo)"]}],"signals":[],"tests":[],"gaps":[],"modules":[]},{"id":"Views","name":"Views","purpose":"Everything derived from a plan as text: the cost-tagged diff, the agent outline, the code skeleton, the spec and Mermaid diagrams.","depth":"mapped","note":"diff.ts borrows typeLabel from mermaid.ts. There are four type printers: mermaid typeLabel, outline ts(), viewmodel toks() and the skeleton's Scope.ts().","sources":["src/views/"],"usedBy":["Page","Cli","Examples"],"contracts":[{"id":"Views/contract/Views","name":"Views","sources":[],"types":[{"id":"Views/contract/Views/type/Change","name":"Change","kind":"record","fields":[{"name":"tag","type":[{"s":"string"}]},{"name":"what","type":[{"s":"string"}]},{"name":"node","type":[{"s":"string"}]}]}],"operations":[{"id":"Views/contract/Views/Diff","name":"Diff","mode":"query","input":[{"name":"before","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]},{"name":"after","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]}],"output":[{"s":"Change","ref":"Views/contract/Views/type/Change"}],"errors":[]},{"id":"Views/contract/Views/Outline","name":"Outline","mode":"query","input":[{"name":"doc","type":[{"s":"Model.PlanDocument","ref":"Model/contract/Model/type/PlanDocument"}]}],"output":[{"s":"string"}],"errors":[]},{"id":"Views/contract/Views/Skeleton","name":"Skeleton","mode":"query","input":[{"name":"plan","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]}],"output":[{"s":"string"}],"errors":[]},{"id":"Views/contract/Views/Spec","name":"Spec","mode":"query","input":[{"name":"plan","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]}],"output":[{"s":"string"}],"errors":[]},{"id":"Views/contract/Views/SystemDiagram","name":"SystemDiagram","mode":"query","input":[{"name":"plan","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]}],"output":[{"s":"string"}],"errors":[]}],"events":[]}],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"gaps":[],"modules":[]},{"id":"Page","name":"Page","purpose":"Turns a document into one self-contained HTML page, and reads the document back out of it.","depth":"mapped","note":"client.js is about 1,300 lines of hand-written DOM code with no tests; viewmodel.ts precomputes everything it draws.","sources":["src/render/"],"usedBy":["Cli","Examples"],"contracts":[{"id":"Page/contract/Page","name":"Page","sources":[],"types":[],"operations":[{"id":"Page/contract/Page/RenderDocument","name":"RenderDocument","mode":"query","input":[{"name":"doc","type":[{"s":"Model.PlanDocument","ref":"Model/contract/Model/type/PlanDocument"}]}],"output":[{"s":"string"}],"errors":[]},{"id":"Page/contract/Page/ReadDocument","name":"ReadDocument","mode":"query","input":[{"name":"html","type":[{"s":"Model.Plan","ref":"Model/contract/Model/type/Plan"}]}],"output":[{"s":"Model.PlanDocument","ref":"Model/contract/Model/type/PlanDocument"}],"errors":[]}],"events":[]}],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"gaps":[],"modules":[]},{"id":"Cli","name":"Cli","purpose":"The seams command. Loads a document from .ts, .json or .html and calls the other modules.","depth":"mapped","sources":["src/cli.ts","install.sh"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"stores":[],"endpoints":[{"id":"Cli/endpoint/seams new","name":"seams new","protocol":"cli","path":"seams new","auth":"none","audience":"public","sources":["src/cli.ts (\"new\")"],"calls":[{"label":"Model.Walk","ref":"Model/contract/Model/Walk"}]},{"id":"Cli/endpoint/seams where","name":"seams where","protocol":"cli","path":"seams where","auth":"none","audience":"public","sources":["src/cli.ts (\"where\")"],"calls":[{"label":"Model.Walk","ref":"Model/contract/Model/Walk"}]},{"id":"Cli/endpoint/seams update","name":"seams update","protocol":"cli","path":"seams update","auth":"none","audience":"public","sources":["src/cli.ts (\"update\")"],"calls":[{"label":"Model.Walk","ref":"Model/contract/Model/Walk"}]},{"id":"Cli/endpoint/seams render","name":"seams render","protocol":"cli","path":"seams render","auth":"none","audience":"public","sources":["src/cli.ts (\"render\")"],"calls":[{"label":"Page.RenderDocument","ref":"Page/contract/Page/RenderDocument"}]},{"id":"Cli/endpoint/seams check","name":"seams check","protocol":"cli","path":"seams check","auth":"none","audience":"public","sources":["src/cli.ts (\"check\")"],"calls":[{"label":"Rules.Check","ref":"Rules/contract/Rules/Check"}]},{"id":"Cli/endpoint/seams read","name":"seams read","protocol":"cli","path":"seams read","auth":"none","audience":"public","sources":["src/cli.ts (\"read\")"],"calls":[{"label":"Page.ReadDocument","ref":"Page/contract/Page/ReadDocument"}]},{"id":"Cli/endpoint/seams verify","name":"seams verify","protocol":"cli","path":"seams verify","auth":"none","audience":"public","sources":["src/cli.ts (\"verify\")"],"calls":[{"label":"Verify.Verify","ref":"Verify/contract/Verify/Verify"}]}],"ports":[{"id":"Cli/port/Git","name":"Git","purpose":"Pulls the latest version for `seams update`.","methods":["pull --ff-only","rev-parse --short HEAD"],"injected":false,"adapters":[{"name":"git (execFileSync)","env":"prod"}],"sources":["src/cli.ts (execFileSync)"]}],"signals":[],"tests":[],"gaps":[],"modules":[]},{"id":"Skill","name":"Skill","purpose":"Tells the agent how to map a repo into a plan, check it, verify it and build from it.","depth":"stub","sources":["skills/seams/SKILL.md"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"gaps":[],"modules":[]},{"id":"Examples","name":"Examples","purpose":"The worked shop example and the Documenso plan, and run.ts which regenerates out/.","depth":"stub","sources":["examples/","plans/documenso-delegation.plan.ts","run.ts"],"usedBy":[],"contracts":[],"aggregates":[],"entities":[],"stores":[],"endpoints":[],"ports":[],"signals":[],"tests":[],"gaps":[],"modules":[]}],"edges":[{"from":"Storage","to":"Model/contract/Model","kind":"call"},{"from":"Rules","to":"Model/contract/Model","kind":"call"},{"from":"Rules","to":"Storage/contract/Storage","kind":"call"},{"from":"Verify","to":"Model/contract/Model","kind":"call"},{"from":"Verify","to":"Rules/contract/Rules","kind":"call"},{"from":"Views","to":"Model/contract/Model","kind":"call"},{"from":"Views","to":"Rules/contract/Rules","kind":"call"},{"from":"Views","to":"Storage/contract/Storage","kind":"call"},{"from":"Page","to":"Model/contract/Model","kind":"call"},{"from":"Page","to":"Rules/contract/Rules","kind":"call"},{"from":"Page","to":"Views/contract/Views","kind":"call"},{"from":"Page","to":"Storage/contract/Storage","kind":"call"},{"from":"Cli/endpoint/seams new","to":"Model/contract/Model/Walk","kind":"route"},{"from":"Cli/endpoint/seams where","to":"Model/contract/Model/Walk","kind":"route"},{"from":"Cli/endpoint/seams update","to":"Model/contract/Model/Walk","kind":"route"},{"from":"Cli/endpoint/seams render","to":"Page/contract/Page/RenderDocument","kind":"route"},{"from":"Cli/endpoint/seams check","to":"Rules/contract/Rules/Check","kind":"route"},{"from":"Cli/endpoint/seams read","to":"Page/contract/Page/ReadDocument","kind":"route"},{"from":"Cli/endpoint/seams verify","to":"Verify/contract/Verify/Verify","kind":"route"},{"from":"Cli","to":"Model/contract/Model","kind":"call"},{"from":"Cli","to":"Rules/contract/Rules","kind":"call"},{"from":"Cli","to":"Page/contract/Page","kind":"call"},{"from":"Cli","to":"Views/contract/Views","kind":"call"},{"from":"Cli","to":"Verify/contract/Verify","kind":"call"},{"from":"Examples","to":"Rules/contract/Rules","kind":"call"},{"from":"Examples","to":"Views/contract/Views","kind":"call"},{"from":"Examples","to":"Page/contract/Page","kind":"call"}],"diagnostics":[{"level":"warning","at":"Verify / port Files","message":"is imported directly, so a test can't swap it; pass it in as a dependency"},{"level":"warning","at":"Cli / port Git","message":"is imported directly, so a test can't swap it; pass it in as a dependency"}]},"proposed":null,"changes":[]}</script>
+<script>
+// In-page renderer for a plan document. Reads #plan-doc and #plan-view and
+// draws the standard layout. No dependencies, no network.
+//
+// One canvas holds everything about structure: modules as cards laid out as
+// a graph (springs along dependencies, repulsion between cards), contracts
+// and stored data as rows that expand in place, types that open as cards
+// where they are defined and wire back to every visible use. Changes are
+// shown on the node they affect. Everything starts collapsed. Context
+// (phases, questions, decisions) sits below in collapsible sections; the
+// sidebar is only for the conversation.
+(() => {
+  "use strict";
+  const doc = JSON.parse(document.getElementById("plan-doc").textContent);
+  const view = JSON.parse(document.getElementById("plan-view").textContent);
+  const TAGS = ["breaking", "migration", "additive", "internal"];
+  const NOTES_KEY = `plan-notes:${doc.title}`;
+
+  const state = {
+    tab: view.proposed ? "change" : "current",
+    open: new Set(),
+    selected: null,
+    phase: null,
+    hover: null,
+    notes: loadNotes(),
+    draft: "",
+    pos: loadPos(),            // module id -> card centre, in canvas units
+    view: { x: 0, y: 0, k: 1 }, // pan and zoom of the canvas
+    fitted: false,
+    ctxOpen: new Set(["questions"]), // which context sections below the canvas are open
+    only: null,                // show only changes with this tag
+  };
+  const GLOSSARY = doc.glossary || [];
+
+  // ---- DOM helpers ------------------------------------------------------------
+  const SVG = "http://www.w3.org/2000/svg";
+  const h = (tag, attrs, ...kids) => fill(document.createElement(tag), attrs, kids);
+  const s = (tag, attrs, ...kids) => fill(document.createElementNS(SVG, tag), attrs, kids);
+  function fill(el, attrs, kids) {
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v == null || v === false) continue;
+      if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const k of kids.flat(Infinity)) if (k != null && k !== false) el.append(k instanceof Node ? k : String(k));
+    return el;
+  }
+  const cls = (...xs) => xs.filter(Boolean).join(" ");
+
+  // ---- tree lookups -----------------------------------------------------------
+  const tree = () => (state.tab === "current" ? view.current : view.proposed);
+
+  // Every module in the tree, sub-modules included.
+  const everyModule = (ms) => ms.flatMap((m) => [m, ...everyModule(m.modules)]);
+
+  function allIds(t) {
+    const out = new Set();
+    for (const m of everyModule(t.modules)) {
+      out.add(m.id);
+      for (const c of m.contracts) {
+        out.add(c.id);
+        for (const x of [...c.operations, ...c.events, ...c.types]) out.add(x.id);
+      }
+      for (const e of m.entities) out.add(e.id);
+      for (const a of m.aggregates) out.add(a.id);
+      for (const st of m.stores) { out.add(st.id); for (const tb of st.tables) out.add(tb.id); }
+      for (const ep of m.endpoints) out.add(ep.id);
+      for (const x of [...m.ports, ...m.signals, ...m.tests]) out.add(x.id);
+    }
+    return out;
+  }
+
+  // A change is shown on the deepest node that exists in the tree being drawn.
+  function placeOf(change, ids) {
+    let id = change.node;
+    while (id && !ids.has(id)) id = id.includes("/") ? id.slice(0, id.lastIndexOf("/")).replace(/\/(contract|entity|type|aggregate|store|endpoint)$/, "") : null;
+    return id || change.module;
+  }
+
+  const under = (id, n) => id === n || id.startsWith(n + "/");
+  const phaseNodes = () => (state.phase == null ? null : doc.slices[state.phase].nodes);
+  const changeInPhase = (c, nodes) => nodes.some((n) => under(c.node, n) || c.module === n);
+  const nodeInPhase = (id) => {
+    const nodes = phaseNodes();
+    return !nodes || nodes.some((n) => under(id, n) || under(n, id));
+  };
+
+  function changesByPlace() {
+    const map = new Map();
+    if (state.tab !== "change") return map;
+    const ids = allIds(tree());
+    const nodes = phaseNodes();
+    for (const c of view.changes) {
+      if (nodes && !changeInPhase(c, nodes)) continue;
+      if (c.tag === "internal") continue; // drawn as new wires instead
+      if (state.only && c.tag !== state.only) continue;
+      const p = placeOf(c, ids);
+      if (!map.has(p)) map.set(p, []);
+      map.get(p).push(c);
+    }
+    return map;
+  }
+  const worst = (cs) => TAGS.find((t) => cs.some((c) => c.tag === t));
+
+  // In the change view, everything a change touches starts open.
+  function openChanged() {
+    const ids = allIds(view.proposed);
+    for (const c of view.changes) {
+      const p = placeOf(c, ids);
+      const parts = p.split("/");
+      for (let i = 2; i <= parts.length; i++) state.open.add(parts.slice(0, i).join("/"));
+    }
+  }
+
+  // ---- interactions -------------------------------------------------------------
+  function select(id) {
+    state.selected = state.selected === id ? null : id;
+    render();
+  }
+  function toggle(id) {
+    state.open.has(id) ? state.open.delete(id) : state.open.add(id);
+    state.selected = id;
+    render();
+  }
+  // Open a referenced type or table where it is defined, then point at it.
+  function reveal(ref) {
+    const typeAt = ref.indexOf("/type/");
+    if (typeAt >= 0) state.open.add(ref.slice(0, typeAt));
+    const parts = ref.split("/");
+    for (let i = 2; i <= parts.length; i++) state.open.add(parts.slice(0, i).join("/"));
+    // A table opens inside its store; an endpoint may sit past the fold.
+    const store = ref.match(/^(.*\/store\/[^/]+)\//);
+    if (store) state.open.add(store[1]);
+    if (ref.includes("/endpoint/")) state.open.add(ref.split("/endpoint/")[0] + "/endpoints");
+    state.open.add(ref);
+    state.selected = ref;
+    render();
+    const el = document.querySelector(`[data-node-id="${CSS.escape(ref)}"]`);
+    if (el) {
+      centerOn(el);
+      el.classList.add("flash");
+      setTimeout(() => el.classList.remove("flash"), 900);
+    }
+  }
+  function hover(ref) {
+    state.hover = ref;
+    document.querySelectorAll(".hot-type").forEach((el) => el.classList.remove("hot-type"));
+    if (ref) document.querySelectorAll(`[data-ref="${CSS.escape(ref)}"], [data-node-id="${CSS.escape(ref)}"]`).forEach((el) => el.classList.add("hot-type"));
+    drawWires();
+  }
+  // "Orders/contract/Orders/CancelOrder" reads as "Orders › CancelOrder".
+  const pretty = (id) => id.split(/\/(?:contract|entity|type|aggregate|store|endpoint)\/|\//)
+    .filter((p, i, xs) => p !== xs[i - 1]).join(" › ").replace(/\u2215/g, "/");
+
+  // When something is selected, the cards it has nothing to do with step back.
+  function focusSet() {
+    const sel = state.selected;
+    if (!sel) return null;
+    const top = (id) => id.split("/")[0];
+    const out = new Set([top(sel)]);
+    for (const e of tree().edges) {
+      if (under(e.from, sel) || under(e.to, sel) || under(sel, e.to)) { out.add(top(e.from)); out.add(top(e.to)); }
+    }
+    return out;
+  }
+  const filteredOut = (id, ctx) => state.tab === "change" && state.only && !allChangesIn(id, ctx).length;
+
+  // ---- canvas -------------------------------------------------------------------
+  function canvas() {
+    const t = tree();
+    const ctx = { placed: changesByPlace(), focus: focusSet() };
+    const tool = (label, title, fn) => h("button", { class: "tool", title, "aria-label": title, onclick: fn }, label);
+    const legend = h("div", { class: "legend" },
+      h("span", { class: "lg-call" }, "calls"), h("span", { class: "lg-event" }, "reacts to event"),
+      h("span", { class: "lg-type" }, "uses type"),
+      h("span", { class: "lg-route" }, "endpoint calls (on hover)"),
+      state.tab === "change" ? h("span", { class: "lg-new" }, "new dependency") : null,
+      state.tab === "change" ? TAGS.slice(0, 3).map((x) => h("span", { class: `lg-tag ${x}` }, x)) : null,
+      h("span", { class: "hint" }, h("kbd", {}, "/"), " search ", h("kbd", {}, "esc"), " clear ", h("kbd", {}, "f"), " fit ",
+        doc.slices.length ? [h("kbd", {}, `1–${doc.slices.length}`), " phases "] : null, "· drag to pan · ctrl + scroll to zoom"));
+    const viewport = h("div", { class: "viewport", id: "viewport" },
+      h("div", { class: "layer", id: "layer", style: layerTransform() },
+        // Dependencies run under the cards; type links run over them, since
+        // they start inside a card.
+        s("svg", { class: "wires under", id: "wires", width: 1, height: 1, "aria-hidden": "true" }),
+        t.modules.map((m) => moduleCard(m, ctx)),
+        s("svg", { class: "wires over", id: "type-wires", width: 1, height: 1, "aria-hidden": "true" })),
+      h("div", { class: "tools" },
+        tool("Fit", "Fit everything in view", fit),
+        tool("+", "Zoom in", () => zoomAt(1.25)),
+        tool("−", "Zoom out", () => zoomAt(0.8)),
+        state.tab === "change" ? tool("Open changes", "Open everything the change touches", () => { openChanged(); render(); }) : null,
+        tool("Collapse", "Collapse everything", () => { state.open.clear(); render(); }),
+        tool("Re-arrange", "Lay the graph out again", () => { state.pos = new Map(); savePos(); state.fitted = false; render(); })));
+    panZoom(viewport);
+    return h("div", { class: "canvas-wrap" }, viewport, legend);
+  }
+
+  // ---- graph layout ---------------------------------------------------------------
+  // Modules are placed by a small force simulation: springs along every
+  // relationship (calls, events, shared types), repulsion between all cards,
+  // and overlap removal using each card's real size. Cards a person dragged
+  // stay where they were put. Expanding a card re-runs a short, gentle pass so
+  // its neighbours make room without the whole graph moving.
+  function links(t) {
+    const out = new Map();
+    const add = (a, b, w) => {
+      if (!a || !b || a === b) return;
+      const k = a < b ? `${a}|${b}` : `${b}|${a}`;
+      out.set(k, { a, b, w: Math.max(out.get(k)?.w || 0, w) });
+    };
+    const mod = (id) => id.split("/")[0];
+    for (const e of t.edges) add(mod(e.from), mod(e.to), 1);
+    for (const m of everyModule(t.modules)) {
+      const refs = [];
+      for (const c of m.contracts) {
+        for (const o of c.operations) refs.push(...o.input.flatMap((f) => f.type), ...(o.output || []));
+        for (const e of c.events) refs.push(...e.payload.flatMap((f) => f.type));
+        for (const ty of c.types) refs.push(...(ty.fields || []).flatMap((f) => f.type));
+      }
+      for (const e of m.entities) refs.push(...e.fields.flatMap((f) => f.type));
+      for (const r of refs) if (r.ref) add(mod(m.id), mod(r.ref), 0.5);
+    }
+    return [...out.values()];
+  }
+
+  function layoutGraph() {
+    const layer = document.getElementById("layer");
+    if (!layer) return;
+    const t = tree();
+    const els = [...layer.querySelectorAll(":scope > .card")];
+    const nodes = els.map((el) => ({ id: el.getAttribute("data-node-id"), el, w: el.offsetWidth, h: el.offsetHeight }));
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const ls = links(t).filter((l) => byId.has(l.a) && byId.has(l.b));
+    const fresh = nodes.filter((n) => !state.pos.has(n.id));
+    const placedBefore = nodes.length - fresh.length;
+    // New cards start near what they connect to, or on a ring.
+    fresh.forEach((n, i) => {
+      const near = ls.filter((l) => l.a === n.id || l.b === n.id).map((l) => state.pos.get(l.a === n.id ? l.b : l.a)).filter(Boolean);
+      if (near.length) {
+        const cx = near.reduce((a, p) => a + p.x, 0) / near.length, cy = near.reduce((a, p) => a + p.y, 0) / near.length;
+        state.pos.set(n.id, { x: cx + 200 * Math.cos(i * 2.4), y: cy + 200 * Math.sin(i * 2.4) });
+      } else {
+        const a = (i / Math.max(1, fresh.length)) * Math.PI * 2;
+        const r = 260 + 40 * fresh.length;
+        state.pos.set(n.id, { x: r * Math.cos(a), y: r * Math.sin(a) * 0.7 });
+      }
+    });
+    for (const n of nodes) Object.assign(n, state.pos.get(n.id));
+    const focus = new Set(view.changes.map((c) => c.module));
+    const full = placedBefore === 0;
+    simulate(nodes, ls, full ? 500 : 80, full ? 1 : 0.15, focus);
+    for (const n of nodes) {
+      state.pos.set(n.id, { x: n.x, y: n.y, pinned: state.pos.get(n.id)?.pinned });
+      place(n);
+    }
+    savePos();
+  }
+
+  function simulate(nodes, ls, iterations, strength, focus) {
+    const PAD = 36;
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const pinned = (n) => state.pos.get(n.id)?.pinned;
+    for (let i = 0; i < iterations; i++) {
+      const alpha = strength * (1 - i / iterations);
+      for (const n of nodes) { n.vx = 0; n.vy = 0; }
+      for (const l of ls) {
+        const a = byId.get(l.a), b = byId.get(l.b);
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+        const rest = (a.w + b.w) / 2 + 140;
+        const f = (d - rest) * 0.04 * l.w * alpha;
+        a.vx += (dx / d) * f; a.vy += (dy / d) * f;
+        b.vx -= (dx / d) * f; b.vy -= (dy / d) * f;
+      }
+      for (let p = 0; p < nodes.length; p++) {
+        for (let q = p + 1; q < nodes.length; q++) {
+          const a = nodes[p], b = nodes[q];
+          const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy + 1, d = Math.sqrt(d2);
+          const f = (120000 / d2) * alpha;
+          a.vx -= (dx / d) * f; a.vy -= (dy / d) * f;
+          b.vx += (dx / d) * f; b.vy += (dy / d) * f;
+        }
+      }
+      for (const n of nodes) {
+        const g = (focus.has(n.id.split("/")[0]) ? 0.02 : 0.006) * alpha;
+        n.vx -= n.x * g; n.vy -= n.y * g * 1.6;
+        if (!pinned(n)) { n.x += clamp(n.vx, 60); n.y += clamp(n.vy, 60); }
+      }
+      // Overlap removal runs at full strength every step: cards never overlap.
+      for (let p = 0; p < nodes.length; p++) {
+        for (let q = p + 1; q < nodes.length; q++) {
+          const a = nodes[p], b = nodes[q];
+          const ox = (a.w + b.w) / 2 + PAD - Math.abs(b.x - a.x);
+          const oy = (a.h + b.h) / 2 + PAD - Math.abs(b.y - a.y);
+          if (ox <= 0 || oy <= 0) continue;
+          const pa = pinned(a) ? 0 : pinned(b) ? 1 : 0.5, pb = 1 - pa;
+          if (ox < oy) {
+            const sx = Math.sign(b.x - a.x) || 1;
+            a.x -= sx * ox * pa; b.x += sx * ox * pb;
+          } else {
+            const sy = Math.sign(b.y - a.y) || 1;
+            a.y -= sy * oy * pa; b.y += sy * oy * pb;
+          }
+        }
+      }
+    }
+  }
+  // Sources and notes stay one or two lines until clicked, so real code with
+  // long paths does not push a card's contracts off screen.
+  function srcLine(list) {
+    if (!list.length) return null;
+    if (list.length === 1) return h("p", { class: "src" }, list[0]);
+    return h("details", { class: "src", onclick: (ev) => ev.stopPropagation() },
+      h("summary", {}, `${list[0]} +${list.length - 1}`),
+      ...list.slice(1).map((x) => h("div", {}, x)));
+  }
+  function noteLine(text) {
+    if (!text) return null;
+    return h("p", { class: "note clamp", title: "Click to read all",
+      onclick: (ev) => { ev.stopPropagation(); ev.currentTarget.classList.toggle("clamp"); drawWires(); } }, text);
+  }
+
+  const clamp = (v, m) => Math.max(-m, Math.min(m, v));
+  function place(n) {
+    n.el.style.left = `${n.x - n.w / 2}px`;
+    n.el.style.top = `${n.y - n.h / 2}px`;
+    n.el.style.visibility = "visible";
+  }
+
+  // ---- pan, zoom, drag ----------------------------------------------------------------
+  const layerTransform = () => `transform: translate(${state.view.x}px, ${state.view.y}px) scale(${state.view.k})`;
+  function applyView() {
+    const layer = document.getElementById("layer");
+    if (layer) layer.style.transform = `translate(${state.view.x}px, ${state.view.y}px) scale(${state.view.k})`;
+  }
+  function zoomAt(f, cx, cy) {
+    const vp = document.getElementById("viewport");
+    if (!vp) return;
+    const r = vp.getBoundingClientRect();
+    const px = cx ?? r.width / 2, py = cy ?? r.height / 2;
+    const k = Math.max(0.25, Math.min(2.5, state.view.k * f));
+    state.view.x = px - ((px - state.view.x) * k) / state.view.k;
+    state.view.y = py - ((py - state.view.y) * k) / state.view.k;
+    state.view.k = k;
+    applyView();
+  }
+  function fit() {
+    const vp = document.getElementById("viewport");
+    const cards = [...document.querySelectorAll("#layer > .card")];
+    if (!vp || !cards.length) return;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const c of cards) {
+      const l = parseFloat(c.style.left), t = parseFloat(c.style.top);
+      x0 = Math.min(x0, l); y0 = Math.min(y0, t);
+      x1 = Math.max(x1, l + c.offsetWidth); y1 = Math.max(y1, t + c.offsetHeight);
+    }
+    const W = vp.clientWidth, H = vp.clientHeight, M = 32;
+    const k = Math.max(0.3, Math.min(1, (W - 2 * M) / (x1 - x0), (H - 2 * M) / (y1 - y0)));
+    state.view = { k, x: W / 2 - ((x0 + x1) / 2) * k, y: H / 2 - ((y0 + y1) / 2) * k };
+    applyView();
+  }
+  function centerOn(el) {
+    const vp = document.getElementById("viewport");
+    if (!vp) return;
+    const v = vp.getBoundingClientRect(), r = el.getBoundingClientRect();
+    const inside = r.left >= v.left && r.right <= v.right && r.top >= v.top && r.bottom <= v.bottom;
+    if (inside) return;
+    state.view.x += v.left + v.width / 2 - (r.left + r.width / 2);
+    state.view.y += v.top + Math.min(v.height / 2, r.height / 2 + 40) - r.top;
+    applyView();
+  }
+
+  function panZoom(vp) {
+    let drag = null;
+    vp.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0 || ev.target.closest("button, .tools")) return;
+      const head = ev.target.closest(".card-head");
+      const card = ev.target.closest(".card");
+      if (card && !head) return; // clicks inside a card body stay clicks
+      drag = { x: ev.clientX, y: ev.clientY, moved: false, card: head ? card : null, start: { ...state.view } };
+      if (drag.card) drag.pos = { ...state.pos.get(card.getAttribute("data-node-id")) };
+      drag.pointer = ev.pointerId;
+    });
+    vp.addEventListener("pointermove", (ev) => {
+      if (!drag) return;
+      const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+      if (!drag.moved) vp.setPointerCapture(drag.pointer); // only once it is a drag, so plain clicks still land
+      drag.moved = true;
+      vp.classList.add("dragging");
+      if (drag.card) {
+        const id = drag.card.getAttribute("data-node-id");
+        const p = { x: drag.pos.x + dx / state.view.k, y: drag.pos.y + dy / state.view.k, pinned: true };
+        state.pos.set(id, p);
+        place({ el: drag.card, x: p.x, y: p.y, w: drag.card.offsetWidth, h: drag.card.offsetHeight });
+      } else {
+        state.view.x = drag.start.x + dx;
+        state.view.y = drag.start.y + dy;
+        applyView();
+      }
+      drawWires();
+    });
+    const end = () => {
+      if (drag?.moved) {
+        if (drag.card) { layoutGraph(); drawWires(); } // neighbours make room around where it was dropped
+        savePos();
+        // Swallow the click that ends a drag so it doesn't select the card.
+        vp.addEventListener("click", (e) => e.stopPropagation(), { capture: true, once: true });
+      }
+      drag = null;
+      vp.classList.remove("dragging");
+    };
+    vp.addEventListener("pointerup", end);
+    vp.addEventListener("pointercancel", end);
+    vp.addEventListener("wheel", (ev) => {
+      ev.preventDefault();
+      const r = vp.getBoundingClientRect();
+      if (ev.ctrlKey || ev.metaKey) zoomAt(Math.exp(-ev.deltaY * 0.01), ev.clientX - r.left, ev.clientY - r.top);
+      else { state.view.x -= ev.deltaX; state.view.y -= ev.deltaY; applyView(); }
+    }, { passive: false });
+  }
+
+  function loadPos() {
+    try { return new Map(JSON.parse(localStorage.getItem(`plan-pos:${doc.title}`) || "[]")); } catch { return new Map(); }
+  }
+  function savePos() {
+    try { localStorage.setItem(`plan-pos:${doc.title}`, JSON.stringify([...state.pos])); } catch { /* storage unavailable */ }
+  }
+
+  function changeList(cs) {
+    if (!cs || !cs.length) return null;
+    return h("ul", { class: "changes" }, [...cs].sort((a, b) => TAGS.indexOf(a.tag) - TAGS.indexOf(b.tag)).map((c) =>
+      h("li", { class: c.tag }, h("span", { class: `tag ${c.tag}` }, c.tag), c.short || c.what)));
+  }
+
+  // "2 breaking · 1 migration", as coloured counts, for a card's header.
+  function tally(cs) {
+    const counts = TAGS.slice(0, 3).map((t) => [t, cs.filter((c) => c.tag === t).length]).filter(([, n]) => n);
+    if (!counts.length) return null;
+    return h("span", { class: "tally", title: counts.map(([t, n]) => `${n} ${t}`).join(", ") },
+      counts.map(([t, n]) => h("span", { class: `dot ${t}` }, String(n))));
+  }
+
+  const facts = (id) => (doc.facts[id] || []).map((f) =>
+    h("span", { class: "fact", title: f.detail || "" }, `${f.label} `, h("b", {}, String(f.value))));
+
+  // A card is read top to bottom in the order a request travels: how you get
+  // in (endpoints), what it promises (contracts), what it keeps (data), where
+  // that lives (storage), then how it is built and run (wiring, signals,
+  // tests), and what is inside it (sub-modules).
+  function moduleCard(m, ctx, close) {
+    const cs = ctx.placed.get(m.id);
+    const all = state.tab === "change" ? allChangesIn(m.id, ctx) : [];
+    const tagged = worst(all);
+    const focus = ctx.focus;
+    const loose = m.entities.filter((e) => !m.aggregates.some((a) => a.root === e.id || a.members.includes(e.id)));
+    return h("article", {
+      class: cls("card", m.depth === "stub" && "stub", tagged && tagged !== "internal" && `tag-${tagged}`,
+        (!nodeInPhase(m.id) || filteredOut(m.id, ctx)) && "dim", !close && focus && !focus.has(m.id) && "unfocused",
+        state.selected === m.id && "selected"),
+      "data-node-id": m.id,
+    },
+      h("header", { class: "card-head", onclick: () => select(m.id) },
+        h("div", { class: "title" },
+          h("span", { class: "name" }, m.name),
+          m.depth === "stub" ? h("span", { class: "badge" }, "not mapped") : null,
+          tally(all),
+          close ? h("button", { class: "x", "aria-label": `Close ${m.name}`, onclick: (ev) => { ev.stopPropagation(); close(); } }, "×") : null),
+        h("p", { class: "purpose" }, terms(m.purpose)),
+        facts(m.id).length ? h("div", { class: "facts" }, facts(m.id)) : null,
+        noteLine(m.note),
+        srcLine(m.sources),
+        reactsTo(m),
+        gapsLine(m),
+        changeList(cs)),
+      group("endpoints", "Endpoints", m.endpoints.length, endpointList(m, ctx)),
+      group("contracts", "Contracts", m.contracts.length, m.contracts.map((c) => contractRow(m, c, ctx))),
+      group("data", "Data", m.entities.length, m.aggregates.map((a) => aggregateBox(m, a, ctx)), loose.map((e) => entityRow(e, ctx))),
+      group("storage", "Storage", m.stores.reduce((n, st) => n + st.tables.length, 0), m.stores.map((st) => storeBox(st, ctx))),
+      group("wiring", "Wiring", m.ports.length, m.ports.map((pt) => portRow(m, pt, ctx))),
+      group("signals", "Signals", m.signals.length, m.signals.map((sg) => signalRow(sg, ctx))),
+      group("tests", "Tests", m.tests.length, testSummary(m), m.tests.map((tc) => testRow(tc, ctx))),
+      group("inside", "Inside", m.modules.length, m.modules.map((sub) => subModule(sub, ctx))));
+  }
+
+  // A labelled band inside a card, coloured by the kind of thing it holds.
+  function group(kind, label, count, ...rows) {
+    if (!count) return null;
+    return h("section", { class: `group k-${kind}` },
+      h("div", { class: "group-label" }, h("span", {}, label), h("span", { class: "group-count" }, String(count))),
+      rows);
+  }
+
+  // An aggregate is drawn as a boundary around the tables it holds, with the
+  // root first. Its invariants open with it.
+  function aggregateBox(m, a, ctx) {
+    const open = state.open.has(a.id);
+    const byId = new Map(m.entities.map((e) => [e.id, e]));
+    return h("section", { class: cls("aggregate", open && "open", state.selected === a.id && "selected", (!nodeInPhase(a.id) || filteredOut(a.id, ctx)) && "dim"), "data-node-id": a.id },
+      h("button", { class: "agg-head", "aria-expanded": String(open), onclick: () => toggle(a.id) },
+        h("span", { class: "agg-label" }, `${a.name} aggregate`),
+        a.invariants.length ? h("span", { class: "meta" }, `${a.invariants.length} rule${a.invariants.length === 1 ? "" : "s"}`) : null,
+        h("span", { class: "chev", "aria-hidden": "true" }, "›")),
+      changeList(ctx.placed.get(a.id)),
+      open && a.invariants.length ? h("ol", { class: "invariants" }, a.invariants.map((i) => h("li", {}, terms(i)))) : null,
+      [a.root, ...a.members].map((id) => byId.get(id)).filter(Boolean).map((e) => entityRow(e, ctx, e.id === a.root)));
+  }
+
+  // A sub-module is a row until opened, then a card nested inside its parent.
+  function subModule(sub, ctx) {
+    const open = state.open.has(sub.id);
+    if (open) return h("div", { class: "nested" }, moduleCard(sub, ctx, () => toggle(sub.id)));
+    return h("section", { class: cls("row", "sub", state.selected === sub.id && "selected", (!nodeInPhase(sub.id) || filteredOut(sub.id, ctx)) && "dim"), "data-node-id": sub.id },
+      rowHead(sub.id, boxIcon(), sub.name, sub.depth === "stub" ? "not mapped" : terms(sub.purpose), ctx, "sub-purpose"));
+  }
+
+  // Where the code reaches another module outside the model. Kept visible on
+  // the card, since it is what the plan simplifies.
+  function gapsLine(m) {
+    if (!m.gaps.length) return null;
+    return h("div", { class: "gaps" }, m.gaps.map((g) => h("div", { class: "gap", title: g.note },
+      h("span", { class: "gap-label" }, "code also reaches"),
+      g.ref ? h("button", { class: "linklike quiet", onclick: (ev) => { ev.stopPropagation(); reveal(g.ref); } }, g.module) : g.module,
+      h("span", { class: "gap-note" }, g.note))));
+  }
+
+  // Events are the one relationship a wire can't label legibly, so the
+  // subscriber says what it listens for.
+  function reactsTo(m) {
+    const evs = tree().edges.filter((e) => e.kind === "event" && e.to === m.id);
+    if (!evs.length) return null;
+    return h("div", { class: "listens" }, h("span", { class: "listens-label" }, "reacts to"),
+      evs.map((e) => [h("button", { class: "linklike quiet", onclick: (ev) => { ev.stopPropagation(); reveal(e.from); } }, e.from.split("/").pop()),
+        e.label.split(", ").map((x) => h("span", { class: "ev" }, x))]));
+  }
+
+  function allChangesIn(id, ctx) {
+    const out = [];
+    for (const [p, cs] of ctx.placed) if (under(p, id)) out.push(...cs);
+    return out;
+  }
+
+  function rowHead(id, icon, label, meta, ctx, metaClass) {
+    const t = state.tab === "change" ? worst(allChangesIn(id, ctx)) : null;
+    return h("button", {
+      class: cls("row-head", t && t !== "internal" && `mark-${t}`), "aria-expanded": String(state.open.has(id)),
+      onclick: () => toggle(id),
+    }, icon, h("span", { class: "row-name" }, label), meta ? h("span", { class: cls("meta", metaClass) }, meta) : null,
+    (doc.facts[id] || []).length ? h("span", { class: "has-facts", title: doc.facts[id].map((f) => `${f.label}: ${f.value}`).join("\n") }, "#") : null,
+    h("span", { class: "chev", "aria-hidden": "true" }, "›"));
+  }
+  const rowClass = (id, ctx, open, ...more) =>
+    cls("row", open && "open", (!nodeInPhase(id) || filteredOut(id, ctx)) && "dim", state.selected === id && "selected", ...more);
+
+  function contractRow(m, c, ctx) {
+    const open = state.open.has(c.id) && m.depth === "mapped";
+    const n = c.operations.length + c.events.length;
+    return h("section", { class: rowClass(c.id, ctx, open), "data-node-id": c.id },
+      rowHead(c.id, hex(), c.name, m.depth === "stub" ? "not mapped" : `${c.operations.length} op${c.operations.length === 1 ? "" : "s"}${c.events.length ? ` · ${c.events.length} event${c.events.length === 1 ? "" : "s"}` : ""}`, ctx),
+      changeList(ctx.placed.get(c.id)),
+      open ? h("div", { class: "row-body" },
+        facts(c.id).length ? h("div", { class: "facts" }, facts(c.id)) : null,
+        noteLine(c.note),
+        srcLine(c.sources),
+        c.operations.map((o) => member(o.id, h("span", { class: `mode ${o.mode}` }, o.mode === "command" ? "cmd" : "query"),
+          [h("span", { class: "mname" }, o.name), "(", fieldsInline(o.input), ")", h("span", { class: "arrow" }, " → "), o.output ? tokens(o.output) : h("span", { class: "muted" }, "void")],
+          [o.errors.length ? h("div", { class: "errs" }, o.errors.map((e) => h("span", { class: "err" }, e))) : null, callers(o.id), testedBy(m, o.id, o.mode)], ctx)),
+        c.events.map((e) => member(e.id, h("span", { class: "mode event" }, "event"),
+          [h("span", { class: "mname" }, e.name), " { ", fieldsInline(e.payload), " }"], null, ctx)),
+        typeShelf(c, ctx)) : null);
+  }
+
+  // Which endpoints reach an operation, so a reader sees how it is called.
+  function callers(opId) {
+    const eps = tree().edges.filter((e) => e.kind === "route" && e.to === opId);
+    if (!eps.length) return null;
+    return h("div", { class: "callers" }, h("span", { class: "muted" }, "called by "), eps.map((e) =>
+      h("button", { class: "ep-chip", onclick: (ev) => { ev.stopPropagation(); reveal(e.from); },
+        onmouseenter: () => hover(e.from), onmouseleave: () => hover(null) }, endpointLabel(e.from))));
+  }
+  const endpointLabel = (id) => id.split("/endpoint/")[1].replace(/∕/g, "/");
+
+  function member(id, badge, sig, extra, ctx) {
+    return h("div", { class: cls("member", state.selected === id && "selected", (!nodeInPhase(id) || filteredOut(id, ctx)) && "dim"), "data-node-id": id,
+      onclick: (ev) => { if (!ev.target.closest(".chip, .ep-chip")) select(id); } },
+    h("div", { class: "sig" }, badge, " ", sig), extra, changeList(ctx.placed.get(id)));
+  }
+
+  // Types live under the contract that defines them: open ones as cards,
+  // the rest as chips that open them.
+  function typeShelf(c, ctx) {
+    if (!c.types.length) return null;
+    const closed = c.types.filter((t) => !state.open.has(t.id));
+    return h("div", { class: "types" },
+      c.types.filter((t) => state.open.has(t.id)).map((t) => typeCard(t, ctx)),
+      closed.length ? h("div", { class: "type-chips" }, h("span", { class: "muted" }, "types "), closed.map((t) => chip({ s: t.name, ref: t.id }, ctx))) : null);
+  }
+
+  function typeCard(t, ctx) {
+    return h("div", { class: cls("typecard", state.selected === t.id && "selected", (!nodeInPhase(t.id) || filteredOut(t.id, ctx)) && "dim"), "data-node-id": t.id },
+      h("div", { class: "type-head" },
+        h("button", { class: "type-name", onclick: () => select(t.id) }, t.name, h("span", { class: "muted" }, t.kind === "enum" ? " one of" : "")),
+        h("button", { class: "x", "aria-label": `Close ${t.name}`, onclick: () => { state.open.delete(t.id); render(); } }, "×")),
+      t.kind === "enum"
+        ? h("div", { class: "values" }, t.values.map((v) => h("span", { class: "value" }, v)))
+        : h("div", { class: "fields" }, t.fields.map((f) => h("div", {}, h("span", { class: "fname" }, f.name), ": ", tokens(f.type)))),
+      changeList(ctx.placed.get(t.id)));
+  }
+
+  function entityRow(e, ctx, root) {
+    const open = state.open.has(e.id);
+    return h("section", { class: rowClass(e.id, ctx, open), "data-node-id": e.id },
+      rowHead(e.id, cyl(), e.name, [root ? h("span", { class: "root" }, "root") : null, `${e.fields.length} fields`], ctx),
+      changeList(ctx.placed.get(e.id)),
+      open ? h("div", { class: "row-body" },
+        facts(e.id).length ? h("div", { class: "facts" }, facts(e.id)) : null,
+        noteLine(e.note),
+        srcLine(e.sources),
+        h("div", { class: "fields" }, e.fields.map((f) =>
+          h("div", {}, h("span", { class: "fname" }, f.name), ": ", tokens(f.type), f.key ? h("span", { class: "key" }, "key") : null))),
+        e.access.length ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "read by "), e.access.map((a) => h("span", { class: "pill" }, a))) : null,
+        e.stored
+          ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "stored in "),
+            h("button", { class: "store-link", onclick: (ev) => { ev.stopPropagation(); reveal(e.stored.id); } },
+              engineBadge(e.stored.engine), ` ${e.stored.table}`))
+          : e.indexes.length ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "indexed on "), e.indexes.join("; ")) : null) : null);
+  }
+
+  // ---- endpoints ----------------------------------------------------------------
+  // The first few are listed; the rest fold away, except ones the change touches.
+  function endpointList(m, ctx) {
+    if (!m.endpoints.length) return null;
+    const LIMIT = 5;
+    const key = `${m.id}/endpoints`;
+    const touched = (ep) => allChangesIn(ep.id, ctx).length > 0;
+    const sorted = [...m.endpoints].sort((a, b) => Number(touched(b)) - Number(touched(a)));
+    const all = state.open.has(key) || sorted.length <= LIMIT + 1;
+    const shown = all ? sorted : sorted.filter((ep, i) => i < LIMIT || touched(ep));
+    return [
+      shown.map((ep) => endpointRow(ep, ctx)),
+      sorted.length > shown.length || (state.open.has(key) && sorted.length > LIMIT + 1)
+        ? h("button", { class: "more", onclick: () => toggle(key) }, all ? "Show fewer" : `+ ${sorted.length - shown.length} more`)
+        : null,
+    ];
+  }
+
+  function endpointRow(ep, ctx) {
+    const open = state.open.has(ep.id);
+    const t = state.tab === "change" ? worst(allChangesIn(ep.id, ctx)) : null;
+    return h("section", { class: rowClass(ep.id, ctx, open, "endpoint"), "data-node-id": ep.id,
+      onmouseenter: () => hover(ep.id), onmouseleave: () => hover(null) },
+      h("button", { class: cls("row-head", t && t !== "internal" && `mark-${t}`), "aria-expanded": String(open), onclick: () => toggle(ep.id) },
+        h("span", { class: `verb v-${(ep.method || ep.protocol).toLowerCase()}` }, ep.method || ep.protocol),
+        h("span", { class: "path" }, pathTokens(ep.path)),
+        /^(none|public)$/i.test(ep.auth) ? null : h("span", { class: cls("aud", `a-${ep.audience}`), title: `${ep.audience} · auth: ${ep.auth}` }, lock()),
+        h("span", { class: "chev", "aria-hidden": "true" }, "›")),
+      changeList(ctx.placed.get(ep.id)),
+      open ? h("div", { class: "row-body" },
+        h("p", { class: "aux" }, h("span", { class: "aux-label" }, "calls "), ep.calls.map((c) => h("button", {
+          class: "op-chip", onclick: (ev) => { ev.stopPropagation(); if (c.ref) reveal(c.ref); },
+          onmouseenter: () => hover(ep.id), onmouseleave: () => hover(null) }, c.label))),
+        h("p", { class: "aux" }, h("span", { class: "aux-label" }, "audience "), ep.audience, " · ", h("span", { class: "aux-label" }, "auth "), ep.auth),
+        noteLine(ep.note), srcLine(ep.sources)) : null);
+  }
+  // Path parameters stand out from the fixed parts.
+  const pathTokens = (p) => p.split(/(\{[^}]+\}|:\w+)/).filter(Boolean).map((x) =>
+    /^(\{|:)/.test(x) ? h("span", { class: "param" }, x) : x.split(/(?<=[/.])/).map((part, i) => [i ? h("wbr", {}) : null, part]));
+
+  // ---- wiring, signals, tests ---------------------------------------------------
+  const linkChip = (l, cls_ = "run-chip") => l.ref
+    ? h("button", { class: cls_, onclick: (ev) => { ev.stopPropagation(); reveal(l.ref); }, onmouseenter: () => hover(l.ref), onmouseleave: () => hover(null) }, l.label)
+    : h("span", { class: cls_ }, l.label);
+  const ENVS = ["prod", "local", "test"];
+
+  // A port: what the module needs from outside, and what plugs into it where.
+  function portRow(m, pt, ctx) {
+    const open = state.open.has(pt.id);
+    const fakedBy = m.tests.filter((tc) => tc.fakes.some((f) => f.ref === pt.id));
+    return h("section", { class: rowClass(pt.id, ctx, open, "port"), "data-node-id": pt.id },
+      rowHead(pt.id, plug(), pt.name, [
+        pt.injected ? null : h("span", { class: "warn-pill", title: "Imported directly, so tests can't swap it" }, "hard-wired"),
+        ENVS.filter((env) => pt.adapters.some((a) => a.env === env)).map((env) =>
+          h("span", { class: `env env-${env}`, title: pt.adapters.filter((a) => a.env === env).map((a) => a.name).join(", ") }, env)),
+      ], ctx),
+      changeList(ctx.placed.get(pt.id)),
+      open ? h("div", { class: "row-body" },
+        h("p", { class: "purpose-line" }, terms(pt.purpose)),
+        pt.methods.length ? h("div", { class: "fields" }, pt.methods.map((x) => h("div", { class: "mono" }, x))) : null,
+        h("div", { class: "adapters" }, ENVS.flatMap((env) => pt.adapters.filter((a) => a.env === env).map((a) =>
+          h("div", {}, h("span", { class: `env env-${env}` }, env), " ", h("span", { class: "mono" }, a.name))))),
+        fakedBy.length ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "faked in "), fakedBy.map((tc) => linkChip({ label: tc.name, ref: tc.id }, "run-chip prose"))) : null,
+        noteLine(pt.note), srcLine(pt.sources)) : null);
+  }
+
+  const SIGNAL_ICON = { log: "≡", metric: "▲", trace: "⇢", audit: "✎" };
+  function signalRow(sg, ctx) {
+    const open = state.open.has(sg.id);
+    return h("section", { class: rowClass(sg.id, ctx, open, "signal"), "data-node-id": sg.id },
+      rowHead(sg.id, h("span", { class: `sig-type st-${sg.type}`, title: sg.type }, sg.type), h("span", { class: "mono" }, sg.name),
+        [sg.alert ? h("span", { class: "alert", title: `Alert: ${sg.alert}` }, bell()) : null], ctx),
+      changeList(ctx.placed.get(sg.id)),
+      open ? h("div", { class: "row-body" },
+        h("p", { class: "aux" }, h("span", { class: "aux-label" }, "on "), linkChip(sg.on)),
+        sg.fields.length ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, sg.type === "metric" ? "labels " : "fields "),
+          sg.fields.map((f) => h("span", { class: "pill mono" }, f))) : null,
+        sg.alert ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "alert "), sg.alert) : null,
+        noteLine(sg.note), srcLine(sg.sources)) : null);
+  }
+
+  // Counts per level first, so the shape of the strategy reads at a glance.
+  const LEVELS = ["unit", "integration", "contract", "e2e"];
+  function testSummary(m) {
+    if (!m.tests.length) return null;
+    const planned = m.tests.filter((tc) => !tc.exists).length;
+    return h("div", { class: "test-summary" },
+      LEVELS.map((l) => [l, m.tests.filter((tc) => tc.level === l).length]).filter(([, n]) => n).map(([l, n]) =>
+        h("span", { class: `lvl lvl-${l}` }, `${n} ${l}`)),
+      planned ? h("span", { class: "muted" }, `${planned} to write`) : null);
+  }
+
+  function testRow(tc, ctx) {
+    const open = state.open.has(tc.id);
+    return h("section", { class: rowClass(tc.id, ctx, open, "test"), "data-node-id": tc.id },
+      rowHead(tc.id, h("span", { class: cls("tstate", tc.exists ? "exists" : "planned"), title: tc.exists ? "already in the repo" : "to write" }, tc.exists ? "✓" : "○"),
+        tc.name, h("span", { class: `lvl lvl-${tc.level}` }, tc.level), ctx, "test-meta"),
+      changeList(ctx.placed.get(tc.id)),
+      open ? h("div", { class: "row-body" },
+        h("p", { class: "aux" }, h("span", { class: "aux-label" }, "proves "), tc.covers.map((c) => linkChip(c))),
+        tc.fakes.length ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "fakes "), tc.fakes.map((c) => linkChip(c))) : null,
+        noteLine(tc.note), srcLine(tc.sources)) : null);
+  }
+
+  // Under an operation: which tests prove it. A command nothing tests says so,
+  // once the module has a testing strategy at all.
+  function testedBy(m, opId, mode) {
+    if (!m.tests.length) return null;
+    const ts = m.tests.filter((tc) => tc.covers.some((c) => c.ref === opId));
+    if (!ts.length) return mode === "command" ? h("div", { class: "callers" }, h("span", { class: "untested" }, "no test yet")) : null;
+    return h("div", { class: "callers" }, h("span", { class: "muted" }, "tested by "), ts.map((tc) =>
+      h("button", { class: "run-chip prose", onclick: (ev) => { ev.stopPropagation(); reveal(tc.id); } }, tc.name)));
+  }
+
+  const plug = () => s("svg", { class: "icon", viewBox: "0 0 16 16", width: 14, height: 14, "aria-hidden": "true" },
+    s("path", { d: "M5.5,1.5 v3.5 M10.5,1.5 v3.5 M3.5,5 h9 v3 a4.5,4.5 0 0 1 -9,0 z M8,12.5 v2.5" }));
+  const bell = () => s("svg", { class: "icon bell", viewBox: "0 0 16 16", width: 12, height: 12, "aria-hidden": "true" },
+    s("path", { d: "M4,11 v-4 a4,4 0 0 1 8,0 v4 l1.5,1.5 h-11 z M6.5,14 a1.5,1.5 0 0 0 3,0" }));
+
+  // ---- storage ------------------------------------------------------------------
+  const ENGINES = { postgres: "PostgreSQL", mysql: "MySQL", sqlite: "SQLite", dynamodb: "DynamoDB", redis: "Redis", s3: "S3", other: "Store" };
+  const engineBadge = (engine) => h("span", { class: `engine e-${engine}` }, ENGINES[engine] || engine);
+
+  function storeBox(st, ctx) {
+    const open = state.open.has(st.id);
+    const scans = st.tables.reduce((n, tb) => n + tb.scans.length, 0);
+    return h("section", { class: cls("store", open && "open", state.selected === st.id && "selected", (!nodeInPhase(st.id) || filteredOut(st.id, ctx)) && "dim"), "data-node-id": st.id },
+      h("button", { class: "store-head", "aria-expanded": String(open), onclick: () => toggle(st.id) },
+        engineBadge(st.engine), h("span", { class: "store-name" }, st.name),
+        scans ? h("span", { class: "scan-count", title: "Lookups with no index" }, `${scans} scan${scans === 1 ? "" : "s"}`) : null,
+        h("span", { class: "meta" }, `${st.tables.length} table${st.tables.length === 1 ? "" : "s"}`),
+        h("span", { class: "chev", "aria-hidden": "true" }, "›")),
+      changeList(ctx.placed.get(st.id)),
+      open ? [noteLine(st.note), st.tables.map((tb) => tableRow(tb, ctx))] : null);
+  }
+
+  function tableRow(tb, ctx) {
+    const open = state.open.has(tb.id);
+    const meta = tb.relational
+      ? `${tb.columns.length} cols · ${tb.indexes.length} idx`
+      : `${tb.gsis.length} index${tb.gsis.length === 1 ? "" : "es"}`;
+    return h("section", { class: rowClass(tb.id, ctx, open, "table"), "data-node-id": tb.id },
+      h("button", { class: cls("row-head", (() => { const t = state.tab === "change" ? worst(allChangesIn(tb.id, ctx)) : null; return t && t !== "internal" && `mark-${t}`; })()),
+        "aria-expanded": String(open), onclick: () => toggle(tb.id) },
+        tableIcon(), h("span", { class: "row-name mono" }, tb.table),
+        tb.scans.length ? h("span", { class: "scan-count" }, "scan") : null,
+        h("span", { class: "meta" }, meta), h("span", { class: "chev", "aria-hidden": "true" }, "›")),
+      changeList(ctx.placed.get(tb.id)),
+      open ? h("div", { class: "row-body" },
+        h("p", { class: "aux" }, h("span", { class: "aux-label" }, "holds "), chip({ s: tb.entityName, ref: tb.entity }, ctx)),
+        tb.relational ? relationalBody(tb) : keyValueBody(tb),
+        tb.scans.length ? h("div", { class: "scans" }, tb.scans.map((x) => h("div", {}, h("span", { class: "scan-count" }, "scan"), " ", x, h("span", { class: "muted" }, " · no index serves this")))) : null) : null);
+  }
+
+  function relationalBody(tb) {
+    return [
+      h("table", { class: "cols" }, h("tbody", {}, tb.columns.map((c) => h("tr", {},
+        h("td", { class: "mono" }, c.key ? h("span", { class: "pk", title: "primary key" }, "PK") : null, c.name),
+        h("td", { class: "mono ctype" }, c.type),
+        h("td", { class: "muted" }, c.nullable ? "null" : ""))))),
+      tb.keyServes.length ? servesLine("primary key", tb.keyServes) : null,
+      tb.indexes.map((i) => h("div", { class: "index" },
+        h("div", { class: "mono" }, h("span", { class: "idx-kind" }, i.unique ? "unique" : i.using || "index"), ` (${i.on.join(", ")})`, h("span", { class: "muted" }, ` ${i.name}`)),
+        i.serves.length ? servesLine(null, i.serves) : null)),
+    ];
+  }
+
+  function keyValueBody(tb) {
+    const key = (label, pk, sk, serves) => h("div", { class: "index" },
+      h("div", { class: "kv" }, h("span", { class: "idx-kind" }, label),
+        h("span", { class: "mono" }, h("span", { class: "muted" }, "PK "), keyTpl(pk)),
+        sk ? h("span", { class: "mono" }, h("span", { class: "muted" }, "SK "), keyTpl(sk)) : null),
+      serves.length ? servesLine(null, serves) : null);
+    return [
+      key("table", tb.pk, tb.sk, tb.keyServes),
+      tb.gsis.map((g) => key(g.name, g.pk, g.sk, g.serves)),
+      tb.ttl ? h("p", { class: "aux" }, h("span", { class: "aux-label" }, "expires by "), tb.ttl) : null,
+    ];
+  }
+  const keyTpl = (t) => t.split(/(\{\w+\})/).filter(Boolean).map((x) => (x.startsWith("{") ? h("span", { class: "param" }, x) : x));
+  const servesLine = (label, xs) => h("div", { class: "serves" }, label ? h("span", { class: "idx-kind" }, label) : null,
+    h("span", { class: "tick", "aria-hidden": "true" }, "✓"), xs.join(" · "));
+
+  const fieldsInline = (fs) => fs.map((f, i) => [i ? ", " : "", h("span", { class: "fname" }, f.name), ": ", tokens(f.type)]);
+  const tokens = (ts) => ts.map((t) => (t.ref ? chip(t) : h("span", { class: "prim" }, t.s)));
+  const chip = (t) => h("button", {
+    class: cls("chip", state.open.has(t.ref) && "linked"), "data-ref": t.ref,
+    onclick: (ev) => { ev.stopPropagation(); reveal(t.ref); },
+    onmouseenter: () => hover(t.ref), onmouseleave: () => hover(null),
+  }, t.s);
+
+  const hex = () => s("svg", { class: "icon", viewBox: "0 0 16 16", width: 14, height: 14, "aria-hidden": "true" },
+    s("polygon", { points: "15,8 11.5,14.1 4.5,14.1 1,8 4.5,1.9 11.5,1.9" }));
+  const boxIcon = () => s("svg", { class: "icon", viewBox: "0 0 16 16", width: 14, height: 14, "aria-hidden": "true" },
+    s("rect", { x: 1.5, y: 2.5, width: 13, height: 11, rx: 2 }), s("path", { d: "M1.5,6 h13" }));
+  const cyl = () => s("svg", { class: "icon", viewBox: "0 0 16 16", width: 14, height: 14, "aria-hidden": "true" },
+    s("ellipse", { cx: 8, cy: 4, rx: 6, ry: 2.4 }), s("path", { d: "M2,4 v8 a6,2.4 0 0 0 12,0 v-8" }));
+
+  const tableIcon = () => s("svg", { class: "icon", viewBox: "0 0 16 16", width: 14, height: 14, "aria-hidden": "true" },
+    s("rect", { x: 1.5, y: 2.5, width: 13, height: 11, rx: 1.5 }), s("path", { d: "M1.5,6.5 h13 M1.5,10 h13 M6,6.5 v7" }));
+  const lock = () => s("svg", { class: "icon lock", viewBox: "0 0 16 16", width: 11, height: 11, "aria-hidden": "true" },
+    s("rect", { x: 3, y: 7, width: 10, height: 7, rx: 1.5 }), s("path", { d: "M5.5,7 v-2 a2.5,2.5 0 0 1 5,0 v2" }));
+
+  // ---- domain words -------------------------------------------------------------
+  // Glossary terms are underlined wherever prose mentions them; hovering one
+  // shows what it means here. One floating tip serves the whole page.
+  const termRe = GLOSSARY.length
+    ? new RegExp(`\\b(${GLOSSARY.map((g) => g.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).sort((a, b) => b.length - a.length).join("|")})(s|es)?\\b`, "gi")
+    : null;
+  const termOf = (word) => GLOSSARY.find((g) => g.term.toLowerCase() === word.toLowerCase());
+  function terms(text) {
+    if (!termRe || !text) return text;
+    const out = [];
+    let last = 0;
+    for (const m of text.matchAll(termRe)) {
+      const g = termOf(m[1]);
+      if (!g) continue;
+      out.push(text.slice(last, m.index), h("span", { class: "term", tabindex: "0", "data-tip": g.meaning, "data-term": g.term }, m[0]));
+      last = m.index + m[0].length;
+    }
+    out.push(text.slice(last));
+    return out;
+  }
+  function tipFor(el) {
+    const tip = document.getElementById("tip");
+    if (!tip) return;
+    if (!el) { tip.hidden = true; return; }
+    tip.replaceChildren(h("b", {}, el.getAttribute("data-term")), " ", el.getAttribute("data-tip"));
+    tip.hidden = false;
+    const r = el.getBoundingClientRect();
+    const w = Math.min(300, window.innerWidth - 24);
+    tip.style.width = `${w}px`;
+    tip.style.left = `${Math.max(12, Math.min(window.innerWidth - w - 12, r.left))}px`;
+    const below = r.bottom + 8 + tip.offsetHeight < window.innerHeight;
+    tip.style.top = `${below ? r.bottom + 6 : r.top - tip.offsetHeight - 6}px`;
+  }
+  document.addEventListener("mouseover", (ev) => { const t = ev.target.closest?.(".term"); tipFor(t || null); });
+  document.addEventListener("focusin", (ev) => { if (ev.target.classList?.contains("term")) tipFor(ev.target); });
+  document.addEventListener("focusout", () => tipFor(null));
+
+  // ---- wires --------------------------------------------------------------------
+  function drawWires() {
+    const layer = document.getElementById("layer"), svg = document.getElementById("wires"), over = document.getElementById("type-wires");
+    if (!layer || !svg || !over) return;
+    over.replaceChildren();
+    const base = layer.getBoundingClientRect(), k = state.view.k;
+    // Positions in canvas units, whatever the current pan and zoom.
+    const box = (el) => {
+      const r = el.getBoundingClientRect();
+      return {
+        l: (r.left - base.left) / k, r: (r.right - base.left) / k, t: (r.top - base.top) / k, b: (r.bottom - base.top) / k,
+        cx: (r.left + r.width / 2 - base.left) / k, cy: (r.top + r.height / 2 - base.top) / k,
+      };
+    };
+    svg.replaceChildren(s("defs", {},
+      s("marker", { id: "ah", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
+        s("path", { d: "M0,0 L10,5 L0,10 z", class: "ah" })),
+      s("marker", { id: "ah-hot", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
+        s("path", { d: "M0,0 L10,5 L0,10 z", class: "ah hot" })),
+      s("marker", { id: "ah-route", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
+        s("path", { d: "M0,0 L10,5 L0,10 z", class: "ah route" }))));
+    // The element for a node, or for its nearest ancestor that is on screen
+    // (a contract inside a closed sub-module is drawn at the sub-module).
+    const find = (id) => {
+      for (let x = id; x; x = x.includes("/") ? x.slice(0, x.lastIndexOf("/")) : null) {
+        const el = layer.querySelector(`[data-node-id="${CSS.escape(x)}"]`);
+        if (el) return el;
+      }
+      return null;
+    };
+    // Where a wire may attach. A card offers the middle of all four sides; a
+    // row offers the card's left and right edges at the row's height.
+    const sides = (el) => {
+      if (el.matches(".card")) {
+        const b = box(el);
+        return [
+          { x: b.cx, y: b.t, nx: 0, ny: -1 }, { x: b.cx, y: b.b, nx: 0, ny: 1 },
+          { x: b.l, y: b.cy, nx: -1, ny: 0 }, { x: b.r, y: b.cy, nx: 1, ny: 0 },
+        ];
+      }
+      const card = box(el.closest(".card")), row = box(el.querySelector(":scope > .row-head, :scope > .agg-head") || el);
+      return [{ x: card.l, y: row.cy, nx: -1, ny: 0 }, { x: card.r, y: row.cy, nx: 1, ny: 0 }];
+    };
+    // Pick the pair of attachment points that face each other most directly.
+    // `shift` slides both ends along their side, so a call and the events
+    // coming back between the same two nodes don't sit on one line.
+    const link = (fromEl, toEl, shift = 0) => {
+      let best = null;
+      for (const a of sides(fromEl)) for (const b of sides(toEl)) {
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+        // Prefer sides that point towards the other end.
+        const facing = (a.nx * dx + a.ny * dy) / d - (b.nx * dx + b.ny * dy) / d;
+        const score = d - facing * 120;
+        if (!best || score < best.score) best = { a, b, d, score };
+      }
+      const { d } = best, k = Math.max(30, Math.min(160, d * 0.4));
+      const a = { ...best.a, x: best.a.x + best.a.ny * shift, y: best.a.y + best.a.nx * shift };
+      const b = { ...best.b, x: best.b.x + best.b.ny * shift, y: best.b.y + best.b.nx * shift };
+      return `M${a.x},${a.y} C${a.x + a.nx * k},${a.y + a.ny * k} ${b.x + b.nx * k},${b.y + b.ny * k} ${b.x},${b.y}`;
+    };
+    const sel = state.selected;
+    const before = new Set(view.current.edges.map((e) => `${e.kind} ${e.from} ${e.to}`));
+
+    for (const e of tree().edges) {
+      const call = e.kind === "call";
+      // Endpoint -> operation links are many; they appear only for the
+      // endpoint or operation being looked at.
+      if (e.kind === "route") {
+        const live = [sel, state.hover].some((x) => x && (under(e.from, x) || under(e.to, x) || x === e.from));
+        if (!live) continue;
+        const from = layer.querySelector(`[data-node-id="${CSS.escape(e.from)}"]`), to = find(e.to);
+        if (!from || !to || from.closest(".card") === to.closest(".card")) continue;
+        svg.append(s("path", { d: link(from, to), class: "wire route hot", "marker-end": "url(#ah-route)" }));
+        continue;
+      }
+      const from = find(e.from), to = find(e.to);
+      // A module and what sits inside it are already related by nesting.
+      if (!from || !to || from === to || from.contains(to) || to.contains(from)) continue;
+      const hot = sel && (under(e.from, sel) || under(e.to, sel) || under(sel, e.to));
+      const fresh = state.tab === "change" && !before.has(`${e.kind} ${e.from} ${e.to}`);
+      svg.append(s("path", {
+        d: link(from, to, call ? 0 : 10),
+        class: cls("wire", call ? "call" : "event", fresh && "new", hot && "hot", sel && !hot && "faded"),
+        "marker-end": `url(#${hot ? "ah-hot" : "ah"})`,
+      }));
+    }
+
+    // Type wires: from each visible use of an open type to its card, when the
+    // two are in different cards (inside one card, hover highlighting is enough).
+    const chipSides = (el) => {
+      const b = box(el);
+      return [{ x: b.l, y: b.cy, nx: -1, ny: 0 }, { x: b.r, y: b.cy, nx: 1, ny: 0 }];
+    };
+    for (const target of layer.querySelectorAll(".typecard, .row.open[data-node-id*='/entity/']")) {
+      const id = target.getAttribute("data-node-id");
+      const head = target.querySelector(".type-head, .row-head");
+      const home = target.closest(".card");
+      for (const c of layer.querySelectorAll(`.chip[data-ref="${CSS.escape(id)}"]`)) {
+        if (c.closest(".card") === home || c.closest(".type-chips")) continue;
+        const hot = state.hover === id || sel === id;
+        let best = null;
+        for (const a of chipSides(c)) for (const b of chipSides(head)) {
+          const d = Math.hypot(b.x - a.x, b.y - a.y);
+          if (!best || d < best.d) best = { a, b, d };
+        }
+        const { a, b, d } = best, k = Math.max(30, Math.min(140, d * 0.4));
+        over.append(s("path", {
+          d: `M${a.x},${a.y} C${a.x + a.nx * k},${a.y} ${b.x + b.nx * k},${b.y} ${b.x},${b.y}`,
+          class: cls("wire", "type", hot && "hot"),
+        }));
+      }
+    }
+  }
+
+  // ---- below the canvas: context ---------------------------------------------------
+  // Open questions come first and start open: they are what the reader owes.
+  function context() {
+    const parts = [];
+    const section = (key, title, count, extra, ...body) => h("details", {
+      class: cls("ctx", extra), open: state.ctxOpen.has(key), id: `ctx-${key}`,
+      ontoggle: (ev) => { ev.target.open ? state.ctxOpen.add(key) : state.ctxOpen.delete(key); },
+    }, h("summary", {}, h("h2", {}, title, h("span", { class: "count" }, String(count)))), body);
+    const nodeLink = (id) => h("button", { class: "node-link", onclick: () => reveal(id) }, pretty(id));
+    if (doc.questions.length) {
+      parts.push(section("questions", "Needs your call", doc.questions.length, "asks", h("ol", { class: "qs" }, doc.questions.map((q) => h("li", {},
+        h("div", { class: "q" }, terms(q.text)),
+        q.options ? h("div", { class: "options" }, q.options.map((o) => h("span", { class: "option" }, o))) : null,
+        q.node ? nodeLink(q.node) : null)))));
+    }
+    if (view.changes.length && doc.slices.length) {
+      const ids = allIds(view.proposed);
+      const taken = new Set();
+      const phaseCards = h("div", { class: "phases" }, doc.slices.map((sl, i) => {
+        const cs = view.changes.filter((c) => !taken.has(c) && changeInPhase(c, sl.nodes));
+        cs.forEach((c) => taken.add(c));
+        return h("div", { class: cls("phase", state.phase === i && "active") },
+          h("h3", {}, h("span", { class: "step" }, String(i + 1)), sl.name, tally(cs)),
+          h("p", {}, terms(sl.goal)),
+          sl.notes ? h("p", { class: "muted" }, terms(sl.notes)) : null,
+          h("button", { class: "linklike", onclick: () => showPhase(i) }, state.phase === i ? "Showing on the map" : "Show on the map"));
+      }));
+      const rest = view.changes.filter((c) => !taken.has(c) && c.tag !== "internal");
+      parts.push(section("phases", "Phases", doc.slices.length, null, phaseCards,
+        rest.length ? h("p", { class: "muted" }, `${rest.length} change(s) not in a phase yet: `,
+          rest.map((c, i) => [i ? ", " : "", h("button", { class: "linklike", onclick: () => reveal(placeOf(c, ids)) }, c.what)])) : null));
+    }
+    if (doc.decisions.length) {
+      parts.push(section("decisions", "Decisions", doc.decisions.length, null, h("ul", { class: "ds" }, doc.decisions.map((d) => h("li", {},
+        h("div", { class: "d" }, terms(d.text)), h("div", { class: "why" }, h("span", { class: "why-label" }, "why "), terms(d.why)),
+        d.node ? nodeLink(d.node) : null)))));
+    }
+    const diags = tree().diagnostics;
+    if (diags.length) {
+      parts.push(section("checks", "Check results", diags.length, null, diags.map((d) =>
+        h("div", { class: `diag ${d.level}` }, h("strong", {}, d.level), " ", h("code", {}, d.at), h("div", {}, d.message)))));
+    }
+    if (GLOSSARY.length) {
+      parts.push(section("glossary", "Domain words", GLOSSARY.length, null, h("dl", { class: "glossary" }, GLOSSARY.map((g) => [
+        h("dt", {}, g.node ? h("button", { class: "linklike", onclick: () => reveal(g.node) }, g.term) : g.term),
+        h("dd", {}, g.meaning)]))));
+    }
+    return parts.length ? h("section", { class: "context" }, parts) : null;
+  }
+
+  function openSection(key) {
+    state.ctxOpen.add(key);
+    render();
+    document.getElementById(`ctx-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // ---- briefing: the page in ten seconds ----------------------------------------------
+  // What was asked, what it costs, what needs an answer, and the order to
+  // read it in. Each tile is also a filter or a shortcut.
+  function briefing() {
+    const t = tree();
+    const tile = (cls_, n, label, onclick, active, title) => h("button", {
+      class: cls("tile", cls_, active && "active", !n && "zero"), onclick, title, "aria-pressed": active ? "true" : "false", disabled: !n,
+    }, h("span", { class: "n" }, String(n)), h("span", { class: "l" }, label));
+    const count = (tag) => view.changes.filter((c) => c.tag === tag && (state.phase == null || changeInPhase(c, doc.slices[state.phase].nodes))).length;
+    const only = (tag) => () => { state.tab = "change"; state.only = state.only === tag ? null : tag; render(); };
+    const ms = everyModule(t.modules);
+    const warnings = t.diagnostics.length;
+    const tiles = view.proposed
+      ? [
+        tile("breaking", count("breaking"), "breaking", only("breaking"), state.only === "breaking", "Consumers must change. Click to show only these."),
+        tile("migration", count("migration"), "migrations", only("migration"), state.only === "migration", "Stored data must change. Click to show only these."),
+        tile("additive", count("additive"), "additive", only("additive"), state.only === "additive", "Nothing existing changes. Click to show only these."),
+      ]
+      : [
+        tile("plain", ms.filter((m) => m.depth === "mapped").length, "modules mapped"),
+        tile("plain", ms.reduce((n, m) => n + m.contracts.length, 0), "contracts"),
+        tile("plain", ms.reduce((n, m) => n + m.entities.length, 0), "tables"),
+        tile("plain", ms.reduce((n, m) => n + m.endpoints.length, 0), "endpoints"),
+      ];
+    tiles.push(tile("asks", doc.questions.length, doc.questions.length === 1 ? "question for you" : "questions for you", () => openSection("questions")));
+    if (warnings) tiles.push(tile("checks", warnings, warnings === 1 ? "check finding" : "check findings", () => openSection("checks")));
+    const steps = doc.slices.length && view.proposed
+      ? h("ol", { class: "stepper", "aria-label": "Phases" },
+        h("li", {}, h("button", { "aria-pressed": String(state.phase == null), onclick: () => { state.phase = null; render(); } }, "All")),
+        doc.slices.map((sl, i) => h("li", {}, h("button", {
+          "aria-pressed": String(state.phase === i), title: sl.goal,
+          onclick: () => { state.tab = "change"; state.phase = state.phase === i ? null : i; render(); },
+        }, h("span", { class: "step" }, String(i + 1)), sl.name))))
+      : null;
+    return h("section", { class: "briefing" },
+      h("div", { class: "ask" }, h("div", { class: "eyebrow" }, doc.mode === "learn" ? "What we're learning" : "The change"), h("p", {}, terms(doc.intent))),
+      h("div", { class: "tiles" }, tiles),
+      steps,
+      GLOSSARY.length ? h("div", { class: "words" }, h("span", { class: "eyebrow" }, "Domain words"),
+        GLOSSARY.map((g) => h("button", { class: "term word", "data-tip": g.meaning, "data-term": g.term, onclick: () => g.node && reveal(g.node) }, g.term))) : null);
+  }
+
+  // ---- search: jump to anything ------------------------------------------------------
+  function searchIndex() {
+    const out = [];
+    for (const m of everyModule(tree().modules)) {
+      out.push({ id: m.id, label: m.name, kind: "module", hint: m.purpose });
+      for (const ep of m.endpoints) out.push({ id: ep.id, label: `${ep.method || ep.protocol} ${ep.path}`, kind: "endpoint", hint: ep.calls.map((c) => c.label).join(", ") });
+      for (const c of m.contracts) {
+        out.push({ id: c.id, label: c.name, kind: "contract", hint: m.name });
+        for (const o of c.operations) out.push({ id: o.id, label: `${c.name}.${o.name}`, kind: "operation", hint: o.mode });
+        for (const e of c.events) out.push({ id: e.id, label: `${c.name}.${e.name}`, kind: "event", hint: "event" });
+        for (const ty of c.types) out.push({ id: ty.id, label: ty.name, kind: "type", hint: c.name });
+      }
+      for (const e of m.entities) out.push({ id: e.id, label: e.name, kind: "data", hint: m.name });
+      for (const st of m.stores) for (const tb of st.tables) out.push({ id: tb.id, label: tb.table, kind: "storage", hint: `${ENGINES[st.engine] || st.engine} · ${st.name}` });
+      for (const pt of m.ports) out.push({ id: pt.id, label: pt.name, kind: "port", hint: pt.purpose });
+      for (const sg of m.signals) out.push({ id: sg.id, label: sg.name, kind: "signal", hint: `${sg.type} on ${sg.on.label}` });
+      for (const tc of m.tests) out.push({ id: tc.id, label: tc.name, kind: "test", hint: `${tc.level} test` });
+    }
+    for (const g of GLOSSARY) out.push({ id: g.node, label: g.term, kind: "word", hint: g.meaning });
+    return out;
+  }
+  function search() {
+    let hits = [], at = 0;
+    const list = h("ul", { class: "hits", role: "listbox", hidden: true });
+    const go = (hit) => { input.value = ""; list.hidden = true; input.blur(); if (hit?.id) reveal(hit.id); };
+    const draw = () => {
+      list.replaceChildren(...hits.map((x, i) => h("li", { role: "option", class: cls(i === at && "on"), "aria-selected": String(i === at),
+        onmousedown: (ev) => { ev.preventDefault(); go(x); } },
+      h("span", { class: `kind k-${x.kind}` }, x.kind), h("span", { class: "hit-label" }, x.label), h("span", { class: "hit-hint" }, x.hint))));
+      list.hidden = !hits.length;
+    };
+    const input = h("input", {
+      type: "search", id: "search", placeholder: "Jump to…  /", "aria-label": "Jump to a module, endpoint, table or word", autocomplete: "off",
+      oninput: () => {
+        const q = input.value.trim().toLowerCase();
+        const idx = searchIndex();
+        hits = q ? idx.filter((x) => x.label.toLowerCase().includes(q) || (x.kind === "word" && x.hint.toLowerCase().includes(q)))
+          .sort((a, b) => Number(!a.label.toLowerCase().startsWith(q)) - Number(!b.label.toLowerCase().startsWith(q))).slice(0, 8) : [];
+        at = 0; draw();
+      },
+      onkeydown: (ev) => {
+        if (ev.key === "ArrowDown") { at = Math.min(hits.length - 1, at + 1); draw(); ev.preventDefault(); }
+        else if (ev.key === "ArrowUp") { at = Math.max(0, at - 1); draw(); ev.preventDefault(); }
+        else if (ev.key === "Enter") go(hits[at]);
+        else if (ev.key === "Escape") { input.value = ""; hits = []; draw(); input.blur(); }
+      },
+      onblur: () => setTimeout(() => { list.hidden = true; }, 100),
+    });
+    return h("div", { class: "search" }, input, list);
+  }
+
+  // Keys for working quickly: / search, esc clear, f fit, 0-9 phases.
+  document.addEventListener("keydown", (ev) => {
+    if (ev.target.closest?.("input, textarea") || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (ev.key === "/") { ev.preventDefault(); document.getElementById("search")?.focus(); }
+    else if (ev.key === "Escape") {
+      if (state.selected || state.only || state.phase != null) { state.selected = null; state.only = null; state.phase = null; render(); }
+    } else if (ev.key === "f") fit();
+    else if (/^[0-9]$/.test(ev.key) && view.proposed) {
+      const i = Number(ev.key) - 1;
+      if (i < doc.slices.length) { state.tab = "change"; state.phase = i < 0 ? null : i; render(); }
+    }
+  });
+
+  function showPhase(i) {
+    state.tab = "change";
+    state.phase = state.phase === i ? null : i;
+    render();
+    document.getElementById("viewport")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // ---- sidebar: the conversation ----------------------------------------------------
+  function sidebar() {
+    const anchor = state.selected;
+    const copy = () => {
+      const text = [`Notes on the plan "${doc.title}":`, ...state.notes.map((n) => `- [${n.anchor || "general"}] ${n.text}`)].join("\n");
+      navigator.clipboard?.writeText(text).then(() => flashButton("copy", "Copied"), () => flashButton("copy", "Copy failed"));
+    };
+    const queue = () => {
+      const text = state.draft.trim();
+      if (!text) return;
+      state.notes.push({ anchor, text });
+      state.draft = "";
+      saveNotes();
+      render();
+    };
+    return h("aside", { class: "chat", "aria-label": "Conversation" },
+      h("div", { class: "chat-head" }, "Conversation"),
+      h("div", { class: "msgs" },
+        state.notes.length ? null : h("p", { class: "empty" }, "Notes you add land here. Click anything on the map first to pin a note to it, then copy them all as one prompt for the agent."),
+        state.notes.map((n, i) => h("div", { class: "msg you queued" },
+          h("div", { class: "who" }, n.anchor ? h("button", { class: "linklike", onclick: () => reveal(n.anchor) }, pretty(n.anchor)) : "General",
+            h("button", { class: "x", "aria-label": "Remove note", onclick: () => { state.notes.splice(i, 1); saveNotes(); render(); } }, "×")),
+          n.text))),
+      h("div", { class: "composer" },
+        h("div", { class: "about" }, anchor
+          ? ["About ", h("b", {}, pretty(anchor)), h("button", { class: "x", "aria-label": "Clear", onclick: () => select(anchor) }, "×")]
+          : h("span", { class: "muted" }, "Click anything on the map to attach a note to it.")),
+        h("textarea", {
+          rows: 3, placeholder: "Write a note…", "aria-label": "Note",
+          oninput: (ev) => { state.draft = ev.target.value; },
+          onkeydown: (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); queue(); } },
+        }, state.draft),
+        h("div", { class: "actions" },
+          h("button", { class: "btn", onclick: queue }, "Add note"),
+          h("button", { class: "btn quiet", id: "copy", disabled: !state.notes.length, onclick: copy },
+            state.notes.length ? `Copy ${state.notes.length} as prompt` : "Copy as prompt"))));
+  }
+  function flashButton(id, text) {
+    const b = document.getElementById(id);
+    if (!b) return;
+    const was = b.textContent;
+    b.textContent = text;
+    setTimeout(() => { b.textContent = was; }, 1200);
+  }
+  function loadNotes() {
+    try { return JSON.parse(localStorage.getItem(NOTES_KEY) || "[]"); } catch { return []; }
+  }
+  function saveNotes() {
+    try { localStorage.setItem(NOTES_KEY, JSON.stringify(state.notes)); } catch { /* storage unavailable */ }
+  }
+
+  // ---- page ---------------------------------------------------------------------------
+  function render() {
+    const tabs = view.proposed
+      ? h("div", { class: "tabs", role: "group", "aria-label": "Which tree" },
+        [["current", "Before"], ["proposed", "After"], ["change", "Change"]].map(([k, label]) =>
+          h("button", { "aria-pressed": String(state.tab === k), onclick: () => { state.tab = k; if (k !== "change") state.only = null; render(); } }, label)))
+      : null;
+    const filters = [
+      state.only ? h("button", { class: `filter-chip ${state.only}`, onclick: () => { state.only = null; render(); } }, `only ${state.only}`, h("span", { "aria-hidden": "true" }, " ×")) : null,
+      state.selected ? h("button", { class: "filter-chip", onclick: () => { state.selected = null; render(); } }, `focus: ${pretty(state.selected)}`, h("span", { "aria-hidden": "true" }, " ×")) : null,
+    ];
+    const textarea = document.activeElement?.tagName === "TEXTAREA";
+    document.getElementById("app").replaceChildren(h("div", { class: "shell" },
+      h("main", { class: "main" },
+        h("header", { class: "top" },
+          h("div", { class: "heading" }, h("h1", {}, doc.title), h("span", { class: "badge" }, doc.mode === "learn" ? "learning" : "plan")),
+          h("div", { class: "controls" }, search(), tabs)),
+        briefing(),
+        filters.some(Boolean) ? h("div", { class: "filters" }, filters) : null,
+        canvas(),
+        context()),
+      sidebar()),
+    h("div", { id: "tip", class: "tip", role: "tooltip", hidden: true }));
+    if (textarea) document.querySelector(".composer textarea")?.focus();
+    layoutGraph();
+    if (!state.fitted) { fit(); state.fitted = true; }
+    drawWires();
+  }
+
+  window.addEventListener("resize", () => requestAnimationFrame(drawWires));
+  render();
+})();
+
+</script>
+</body>
+</html>
