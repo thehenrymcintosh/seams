@@ -3,8 +3,9 @@
 **Plan a code change at the level of boundaries before writing the code.**
 
 You describe a change. Your coding agent maps the parts of the codebase it touches and writes one
-HTML page: the modules, the data they own, the contracts between them, the storage and the
-endpoints, plus what the change costs and what it needs you to decide.
+HTML page: the modules, the data they own, the contracts between them, storage, endpoints, wiring,
+signals and tests, plus what the change costs and what it needs you to decide. Then it builds the
+change and keeps the plan true to the code.
 
 ![A plan for adding signer delegation to Documenso](docs/documenso-delegation.png)
 
@@ -13,14 +14,16 @@ endpoints, plus what the change costs and what it needs you to decide.
   everything starts collapsed.
 - **Checked, not just drawn.** A checker catches cycles, modules reaching into each other's tables,
   lookups with no index, and endpoints calling things they shouldn't.
-- **Readable by the agent too.** The page carries a text outline the agent validates its code against.
+- **True to the code.** `seams verify` fails when the plan and the code disagree, before you review
+  and after every slice is built.
+- **Readable by the agent too.** The page carries a text outline the agent builds against.
 
 ---
 
 ## Install
 
-You need **Node 22.18 or newer** (`node -v` to check) and a coding agent that supports skills,
-such as Claude Code.
+You need **Node 22.18 or newer** (`node -v` to check), git, and a coding agent that supports
+skills, such as Claude Code.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/thehenrymcintosh/seams/main/install.sh | sh
@@ -44,7 +47,7 @@ seams where      # prints ~/.seams
 git clone https://github.com/thehenrymcintosh/seams.git
 cd seams
 npm link                                   # the seams command
-ln -s "$(pwd)/skills/seams" ~/.claude/skills/seams   # the skill (Claude Code)
+mkdir -p ~/.claude/skills && ln -s "$(pwd)/skills/seams" ~/.claude/skills/seams   # the skill
 ```
 
 Or add just the skill with `npx skills add thehenrymcintosh/seams --skill seams` (`-g` for every project).
@@ -73,6 +76,15 @@ In your project, ask the agent:
 ```
 
 Or just say "plan this change" or "help me understand how X works". The agent loads the skill on its own.
+
+### How a session goes
+
+1. **Map.** The agent reads the code near the change and writes the plan.
+2. **Check and verify.** The plan must make sense (`seams check`) and match the code
+   (`seams verify`) before you see it.
+3. **Review.** You read the page, answer its questions and leave notes.
+4. **Build.** The agent builds one phase at a time and runs `seams verify --tree proposed` after
+   each. If the code had to differ, the plan changes too, so the page shows what was built.
 
 It writes two files in `plans/`:
 
@@ -143,6 +155,7 @@ On top of that, each plan has **phases** (slices that ship on their own), **ques
 | `seams render <file>` | Write the `.plan.html` page. Refuses if the plan has errors (`--force` to render anyway) |
 | `seams read <file.html>` | Print the plan inside a page as JSON (`--outline` for the agent outline) |
 | `seams verify <file>` | Check the plan against the code in this repo (`--tree proposed` after building, `--repo <dir>` for another folder) |
+| `seams skeleton <file>` | Write typed contracts, repositories, ports and planned tests for the proposed tree (`-o <dir>`) |
 | `seams where` | Print where seams is installed |
 | `seams update` | Pull the latest version |
 
@@ -167,6 +180,7 @@ Errors stop `seams render`. Warnings are shown on the page.
 - A signal or test pointing at something the module doesn't have
 - A token or secret in a log field, or an id or email as a metric label
 - A test faking something that isn't a port or a used contract
+- A gap naming a module that doesn't exist, or one that's already a declared dependency
 
 Example output from `examples/shop.tangled.ts`:
 
@@ -212,7 +226,8 @@ aggregate's rules. The planned tests cover that.
 
 ## Turning a plan into code
 
-`run.ts` shows every view on the worked example (`node run.ts`, output in `out/`):
+`seams skeleton <file>` writes a typed starting point for the proposed tree. `run.ts` shows every
+view on the worked example (`node run.ts`, output in `out/`):
 
 | View | File | What you get |
 | --- | --- | --- |
@@ -262,10 +277,14 @@ const orders = module("Orders", {
 | `src/ast.ts` | The plan's node types. Start here. |
 | `src/dsl.ts` | Helpers for writing plans |
 | `src/check.ts` | The checker |
+| `src/verify.ts` | Holds a plan to the code in a repository |
+| `src/normalize.ts` | Fills in what older or hand-written plans leave out, once, on load |
+| `src/types.ts` | Prints type expressions |
 | `src/storage.ts` | Which key or index serves each lookup |
 | `src/views/` | Outline, diff, skeleton, spec and diagram views |
 | `src/render/` | The HTML page (`client.js`, `client.css`, no dependencies) |
 | `src/cli.ts` | The `seams` command |
+| `install.sh` | The one-line install and update |
 | `examples/` | A small shop, before and after adding payments, plus a broken version |
 | `plans/documenso-delegation.plan.ts` | A real run on [Documenso](https://github.com/documenso/documenso) |
 | `plans/seams.plan.ts` | seams mapped with seams; `seams verify plans/seams.plan.ts` passes on this repo |
@@ -290,8 +309,11 @@ Node runs the `.ts` files directly, so the code avoids `enum`, `namespace` and p
 
 ## Known limits
 
-- Verify finds imports with a small scanner that skips comments and template strings, not the TypeScript
-  compiler, so seams installs with no dependencies. It checks Prisma schemas only.
+- Verify finds imports with a small scanner, not the TypeScript compiler, so seams installs with no
+  dependencies. It skips comments, strings and regex literals, and resolves relative paths, tsconfig
+  `paths` and workspace packages. It doesn't follow a tsconfig `extends`. It checks Prisma schemas only.
 - The review loop is copy and paste. A command that sends notes straight back to the agent is next.
 - Transactions, sync vs async calls and contract versions aren't modelled yet.
 - The checker doesn't know which tests the change needs; the skill asks for one per new command and invariant.
+- Plans are TypeScript, and verify understands TypeScript and JavaScript imports. Other languages
+  can be planned and rendered, but only their `src()` paths and symbols are verified.

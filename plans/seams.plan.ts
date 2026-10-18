@@ -117,8 +117,8 @@ const cli = module("Cli", {
   uses: ["Model", "Rules", "Page", "Views", "Verify"],
   ports: [port("Git", "Pulls the latest version for `seams update`.", ["pull --ff-only", "rev-parse --short HEAD"], { prod: "git (execFileSync)" },
     { injected: false, sources: [src("src/cli.ts", "execFileSync")] })],
-  endpoints: ["new", "where", "update", "render", "check", "read", "verify"].map((c) =>
-    rpc("cli", `seams ${c}`, c === "verify" ? "Verify.Verify" : c === "check" ? "Rules.Check" : c === "render" ? "Page.RenderDocument" : c === "read" ? "Page.ReadDocument" : "Model.Walk",
+  endpoints: ["new", "where", "update", "render", "check", "read", "verify", "skeleton"].map((c) =>
+    rpc("cli", `seams ${c}`, ({ verify: "Verify.Verify", check: "Rules.Check", render: "Page.RenderDocument", read: "Page.ReadDocument", skeleton: "Views.Skeleton" } as Record<string, string>)[c] ?? "Model.Walk",
       { auth: "none", audience: "public", sources: [src("src/cli.ts", `"${c}"`)] })),
 });
 

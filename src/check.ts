@@ -214,7 +214,7 @@ export function check(plan: Plan): Diagnostic[] {
       const faked = m.tests.filter((tc) => tc.fakes.includes(p.name)).length;
       const fake = p.adapters.some((a) => a.env === "test");
       const n = `${faked} test${faked === 1 ? "" : "s"}`;
-      if (!p.injected && faked) warn(at, `${n} fake it, but the code imports it directly and has no test adapter; inject it and add a fake`);
+      if (!p.injected && faked) warn(at, `${n} fake it, but the code imports it directly; inject it so the ${fake ? "test adapter" : "fake"} can be passed in${fake ? "" : ", and add a test adapter"}`);
       else if (!p.injected) warn(at, "is imported directly, so a test can't swap it; pass it in as a dependency");
       else if (faked && !fake) warn(at, `${n} fake it, but it has no test adapter yet`);
     }

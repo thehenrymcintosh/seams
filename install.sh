@@ -8,6 +8,9 @@
 # update. Override the folders with SEAMS_HOME, SEAMS_BIN and SEAMS_SKILLS.
 set -eu
 
+# Everything runs inside main, so a download cut short runs nothing.
+main() {
+
 REPO="${SEAMS_REPO:-https://github.com/thehenrymcintosh/seams.git}"
 HOME_DIR="${SEAMS_HOME:-$HOME/.seams}"
 BIN_DIR="${SEAMS_BIN:-$HOME/.local/bin}"
@@ -37,20 +40,20 @@ fi
 
 # 3. The command: a small wrapper, so nothing needs root or a global npm folder.
 mkdir -p "$BIN_DIR"
-cat > "$BIN_DIR/seams" <<WRAP
-#!/bin/sh
-exec node "$HOME_DIR/src/cli.ts" "\$@"
-WRAP
+# Single-quote the path so spaces, quotes or $ in it survive.
+quoted=$(printf '%s' "$HOME_DIR/src/cli.ts" | sed "s/'/'\\\\''/g")
+printf '#!/bin/sh\nexec node '"'"'%s'"'"' "$@"\n' "$quoted" > "$BIN_DIR/seams"
 chmod +x "$BIN_DIR/seams"
 
 # 4. The skill. Leave anything that isn't our own link alone.
 mkdir -p "$SKILLS_DIR"
 link="$SKILLS_DIR/seams"
-if [ -L "$link" ] || [ ! -e "$link" ]; then
-  ln -sfn "$HOME_DIR/skills/seams" "$link"
+target="$HOME_DIR/skills/seams"
+if [ ! -e "$link" ] && [ ! -L "$link" ] || [ "$(readlink "$link" 2>/dev/null)" = "$target" ]; then
+  ln -sfn "$target" "$link"
   skill="linked at $link"
 else
-  skill="not linked: $link already exists and isn't a link, so it was left alone"
+  skill="not linked: $link already exists and isn't this install's link, so it was left alone"
 fi
 
 echo
@@ -62,3 +65,6 @@ case ":$PATH:" in
 esac
 echo
 echo "Try it: ask your agent to \"/seams plan <your change>\". Update any time with: seams update"
+}
+
+main "$@"

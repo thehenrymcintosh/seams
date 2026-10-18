@@ -53,6 +53,7 @@ export function diff(before: Plan, after: Plan): Change[] {
             push(mod, "migration", `${eb.name}.${fb.name}: ${typeLabel(fa.type)} → ${typeLabel(fb.type)}`, undefined, eid, `${fb.name}: ${typeLabel(fa.type)} → ${typeLabel(fb.type)}`);
           }
         }
+        if (ea.key.join() !== eb.key.join()) push(mod, "migration", `${eb.name}: key ${ea.key.join(", ")} → ${eb.key.join(", ")}`, undefined, eid, `key ${ea.key.join(", ")} → ${eb.key.join(", ")}`);
         const ia = new Set(ea.indexes.map((i) => i.fields.join(","))), ib = new Set(eb.indexes.map((i) => i.fields.join(",")));
         for (const i of ib) if (!ia.has(i)) push(mod, "migration", `${eb.name}: add index (${i})`, undefined, eid, `add index (${i})`);
         for (const i of ia) if (!ib.has(i)) push(mod, "migration", `${eb.name}: drop index (${i})`, undefined, eid, `drop index (${i})`);
@@ -99,6 +100,7 @@ export function diff(before: Plan, after: Plan): Change[] {
           for (const c of xb.columns) {
             const prev = xa.columns.find((y) => y.field === c.field);
             if (prev && prev.type !== c.type && c.type) at(`${c.column ?? c.field}: ${prev.type ?? "default"} → ${c.type}`);
+            if (prev && (prev.column ?? prev.field) !== (c.column ?? c.field)) at(`rename column ${prev.column ?? prev.field} → ${c.column ?? c.field}`);
           }
         }
       }
@@ -109,6 +111,13 @@ export function diff(before: Plan, after: Plan): Change[] {
       for (const e of eps.removed) push(mod, "breaking", `endpoint ${e.name} removed`, undefined, ids.module(mod), `endpoint ${e.name} removed`);
       for (const [ea, eb] of eps.both) {
         const eid = ids.endpoint(mod, eb.name);
+        const where = (e: typeof ea) => `${e.method ? `${e.method} ` : ""}${e.path}`;
+        if (where(ea) !== where(eb)) push(mod, "breaking", `${eb.name}: moves from ${where(ea)} to ${where(eb)}`, undefined, eid, `moves from ${where(ea)} to ${where(eb)}`);
+        const reach = { public: 2, app: 1, internal: 0 };
+        if (ea.audience !== eb.audience) {
+          const tag: Tag = reach[eb.audience] < reach[ea.audience] ? "breaking" : "additive";
+          push(mod, tag, `${eb.name}: audience ${ea.audience} → ${eb.audience}`, undefined, eid, `audience ${ea.audience} → ${eb.audience}`);
+        }
         if (ea.auth !== eb.auth) push(mod, "breaking", `${eb.name}: auth ${ea.auth} → ${eb.auth}`, undefined, eid, `auth ${ea.auth} → ${eb.auth}`);
         if (ea.calls.join() !== eb.calls.join()) push(mod, "internal", `${eb.name}: now calls ${eb.calls.join(", ")}`, undefined, eid, `now calls ${eb.calls.join(", ")}`);
       }
@@ -225,6 +234,10 @@ function diffContract(a: Contract, b: Contract, push: ContractPush): void {
     const ps = match(ea.payload, eb.payload);
     for (const f of ps.added) push("additive", `${eb.name}: new field ${f.name}`, eb.name, `new field ${f.name}`);
     for (const f of ps.removed) push("breaking", `${eb.name}: field ${f.name} removed`, eb.name, `field ${f.name} removed`);
+    for (const [fa, fb] of ps.both) {
+      const was = typeLabel(fa.type), now = typeLabel(fb.type);
+      if (was !== now) push("breaking", `${eb.name}: field ${fb.name} is now ${now}`, eb.name, `field ${fb.name}: ${was} → ${now}`);
+    }
   }
 }
 
@@ -238,6 +251,10 @@ function diffType(a: TypeDef, b: TypeDef, push: (tag: Tag, what: string, short: 
     const fs = match(a.fields as Field[], b.fields as Field[]);
     for (const f of fs.added) at("additive", `gains field ${f.name}`);
     for (const f of fs.removed) at("breaking", `loses field ${f.name}`);
+    for (const [fa, fb] of fs.both) {
+      const was = typeLabel(fa.type), now = typeLabel(fb.type);
+      if (was !== now) at("breaking", `field ${fb.name}: ${was} → ${now}`);
+    }
   } else {
     at("breaking", "changed shape");
   }

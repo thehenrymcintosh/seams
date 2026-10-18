@@ -1,17 +1,20 @@
 ---
 name: seams
-description: Map a TypeScript codebase into a plan document (modules, data, contracts) for a change the user describes, or to explain how part of it works, and render it as one standalone HTML page.
+description: Plan a code change at the level of module boundaries, or explain how part of a codebase fits together. Maps modules, data, storage, contracts, endpoints, wiring, signals and tests into one checked HTML page, verifies the map against the code, and keeps plan and code in step while building.
 ---
 
 # Plan documents
 
 A plan document is the reference for one planning or learning session. It holds the system's
 module boundaries, the data each module owns, and the contracts between them, as a tree you write
-in TypeScript with the seams DSL. The CLI checks the tree and renders one HTML file that a
-person reviews and that you read back on the next round.
+in TypeScript with the seams DSL. The CLI checks the tree, verifies it against the code, and
+renders one HTML file that a person reviews and that you read back on the next round.
 
-It needs the `plan` command (from the seams repo, installed with `npm link`). If `seams where`
-fails, tell the user to install seams first (see its README) and stop.
+It needs the `seams` command. If `seams where` fails, tell the user to install it with
+`curl -fsSL https://raw.githubusercontent.com/thehenrymcintosh/seams/main/install.sh | sh` and stop.
+
+A session goes: map → `seams check` → `seams verify` → `seams render` → the user reviews →
+build slice by slice, running `seams verify --tree proposed` after each.
 
 ## When to use it
 
@@ -123,28 +126,25 @@ unchanged modules are written once.
 - `facts`: deterministic evidence keyed by node id (counts, complexity, call sites). Say how each
   was measured in `detail`. Never make one up.
 
-## Check, render, read back
+## Check, verify, render
+
+Run these from the repository root:
 
 ```sh
-seams check  plans/<slug>.plan.ts
+seams check  plans/<slug>.plan.ts          # the plan is consistent with itself
+seams verify plans/<slug>.plan.ts          # the current tree matches the code
 seams render plans/<slug>.plan.ts          # writes plans/<slug>.plan.html
 seams read   plans/<slug>.plan.html --outline
 ```
 
-Then hold the map to the code, from the repository root:
+`check` errors usually mean a boundary is wrong (a cycle, a module reaching into another's table).
+Fix them by changing the model, not by deleting the rule's subject. Warnings are findings; keep the
+ones that describe the real code and mention them. `render` refuses a plan with errors.
 
-```sh
-seams verify plans/<slug>.plan.ts          # the current tree must match the code
-```
-
-It checks that every `src()` exists and names a real symbol, that imports between module folders
-go through a declared `uses` or a `gap()`, that tables, columns and indexes exist in
-`schema.prisma`, and that each operation has code. Do not show the user a plan whose current tree
+`verify` checks that every `src()` exists and names a real symbol, that imports between module
+folders go through a declared `uses` or a `gap()`, that tables, columns and indexes exist in
+`schema.prisma`, and that each operation has code. Never show the user a plan whose current tree
 fails verify: fix the map, add the missing `src()`, or declare the gap.
-
-`render` refuses a plan with errors. Fix errors by changing the model, not by deleting the rule's
-subject: an error usually means a boundary is wrong (a cycle, a module reaching into another's
-table). Warnings are findings; keep the ones that describe the real code and mention them.
 
 Then read the outline back and check it against the intent: every part of the intent should land
 on a node, and every change in the change list should be one you meant.
@@ -154,7 +154,8 @@ on a node, and every change in the change list should be one you meant.
 The plan is the spec, and it must still be true when the change is done. Build one slice at a time.
 For each slice:
 
-1. Write the code.
+1. Write the code. `seams skeleton plans/<slug>.plan.ts` writes typed contracts, repositories,
+   ports and planned tests for the proposed tree as a starting point, if that helps.
 2. Point every new operation and endpoint at the code that implements it with `src()`. Verify
    refuses a new one without it.
 3. Run `seams verify plans/<slug>.plan.ts --tree proposed`. Its errors are the slice's remaining
@@ -169,7 +170,7 @@ them `exists: true` with a `src()`).
 ## On the next round
 
 The user may come back with the HTML file and notes copied from its sidebar (each note names a
-node id). Read the document with `read <file>.plan.html`, apply the notes to the `.plan.ts`, and
+node id). Read the document with `seams read <file>.plan.html`, apply the notes to the `.plan.ts`, and
 render again to the same path. Answered questions become decisions.
 
 ## Reporting

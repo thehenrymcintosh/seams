@@ -71,3 +71,57 @@ test("new operations must point at their code", () => {
   assert.ok(verify(withOp(), repo, before).some((f) => /Orders.Refund.*is new in this change; give it a src\(\)/.test(`${f.at} ${f.message}`)));
   assert.ok(verify(withOp([src("src/orders/place.ts", "placeOrder")]), repo, before).every((f) => !f.at.includes("Refund")));
 });
+
+test("regex literals and plain strings that mention imports don't count", () => {
+  const code = codeOnly(`const re = /import x from "y"/g;\nconst s = "import z from 'w'";\nimport a from "./a.ts";\n`);
+  assert.ok(!code.includes(`"y"`) && !code.includes("'w'"));
+  assert.ok(code.includes(`"./a.ts"`));
+});
+
+test("imports resolve through .js specifiers, tsconfig paths and ./ source paths", () => {
+  const files = memoryFiles({
+    "tsconfig.json": `{
+  // aliases
+  "compilerOptions": { "baseUrl": ".", "paths": { "@pay/*": ["src/payments/*"], }, /* end */ },
+}`,
+    "src/orders/a.ts": `import { charge } from "../payments/charge.js";\n`,
+    "src/orders/b.ts": `import { charge } from "@pay/charge";\n`,
+    "src/payments/charge.ts": `export function charge() {}\n`,
+  });
+  const p = (uses: string[]) => plan("p", [
+    module("Orders", { purpose: "x", sources: [src("./src/orders/")], uses }),
+    module("Payments", { purpose: "x", sources: [src("src/payments")], provides: [contract("Payments", {})] }),
+  ]);
+  const undeclared = verify(p([]), files).find((f) => f.at === "Orders / uses");
+  assert.match(undeclared?.message ?? "", /imports Payments \(2 imports/);
+  assert.deepEqual(verify(p(["Payments"]), files), []);
+});
+
+test("Prisma @map and @@map names match either spelling", () => {
+  const files = memoryFiles({
+    "src/orders/place.ts": "export {}\n",
+    "prisma/schema.prisma": `model Order {\n  id String @id\n  customerId String @map("customer_id")\n  @@index([customerId])\n  @@map("orders")\n}\n`,
+  });
+  const p = (table_: string, column: string) => plan("p", [module("Orders", {
+    purpose: "x", sources: [src("src/orders/")],
+    entities: [entity("Order", { id: t.string, customerId: t.string })],
+    stores: [store("db", "postgres", [table("Order", table_, { indexes: [idx(column)] })])],
+  })]);
+  assert.deepEqual(verify(p("orders", "customer_id"), files), []);
+  assert.deepEqual(verify(p("Order", "customerId"), files), []);
+  assert.ok(verify(p("nope", "customerId"), files).some((f) => /no model or @@map named nope/.test(f.message)));
+});
+
+test("a gap may name a parent of the module the code reaches", () => {
+  const nested = module("Payments", {
+    purpose: "x",
+    modules: [module("Gateway", { purpose: "x", sources: [src("src/payments/")] })],
+  });
+  assert.deepEqual(run(orders({ uses: [], gaps: [gap("Payments", "calls the gateway directly")] }), nested), []);
+});
+
+test("a new operation needs code even in a module that has no sources", () => {
+  const bare = (ops: ReturnType<typeof command>[]) => plan("p", [module("Orders", { purpose: "x", provides: [contract("Orders", { operations: ops })] })]);
+  const fs = verify(bare([command("PlaceOrder", {}, null), command("Refund", {}, null)]), repo, bare([command("PlaceOrder", {}, null)]));
+  assert.ok(fs.some((f) => f.at.includes("Refund") && /is new in this change/.test(f.message)));
+});
