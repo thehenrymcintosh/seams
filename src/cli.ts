@@ -5,10 +5,12 @@
 //
 //   seams new    <slug> [--learn]                 start plans/<slug>.plan.ts from a template
 //   seams where                                  print the folder seams is installed in
+//   seams update                                 pull the latest version into that folder
 //   node src/cli.ts render <doc.ts|doc.json|doc.html> [-o out.html] [--force]
 //   node src/cli.ts read   <doc.html> [--outline] print the embedded document as JSON, or as the agent outline
 //   node src/cli.ts check  <doc.json|doc.html>    run the checker on both trees
 
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -42,8 +44,8 @@ function template(slug: string, learn: boolean): string {
   const title = slug.replace(/[-_]+/g, " ").replace(/^./, (c) => c.toUpperCase());
   return `import type { PlanDocument } from "${ROOT}/src/doc.ts";
 import {
-  aggregate, command, contract, entity, enumOf, event, findBy, get, http, idx, module, plan, query, record, repo, rpc, save,
-  src, store, stub, subscribe, t, table, uniqueIdx,
+  aggregate, audit, command, contract, entity, enumOf, event, findBy, get, http, idx, log, metric, module, plan, port, query,
+  record, repo, rpc, save, src, store, stub, subscribe, t, table, test, trace, uniqueIdx,
 } from "${ROOT}/src/dsl.ts";
 
 // Map the modules the intent touches here; name everything else with stub().
@@ -72,6 +74,14 @@ switch (cmd) {
   case "where":
     console.log(ROOT);
     break;
+  case "update": {
+    if (!existsSync(resolve(ROOT, ".git"))) { console.error(`${ROOT} is not a git clone; reinstall with install.sh`); process.exit(1); }
+    const head = () => execFileSync("git", ["-C", ROOT, "rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
+    const before = head();
+    execFileSync("git", ["-C", ROOT, "pull", "--ff-only", "--quiet"], { stdio: "inherit" });
+    console.log(before === head() ? `seams is up to date (${before})` : `Updated seams ${before} -> ${head()}`);
+    break;
+  }
   case "new": {
     if (!file) { console.error("usage: seams new <slug> [--learn]"); process.exit(2); }
     const out = resolve("plans", `${file}.plan.ts`);
@@ -105,6 +115,6 @@ switch (cmd) {
     process.exit(ds.some((d) => d.level === "error") ? 1 : 0);
   }
   default:
-    console.error("usage: seams new <slug> | seams render|check|read <file> | seams where");
+    console.error("usage: seams new <slug> | seams render|check|read <file> | seams where | seams update");
     process.exit(2);
 }

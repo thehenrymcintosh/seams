@@ -22,39 +22,45 @@ endpoints, plus what the change costs and what it needs you to decide.
 You need **Node 22.18 or newer** (`node -v` to check) and a coding agent that supports skills,
 such as Claude Code.
 
-**1. Get the `seams` command**
-
 ```sh
-git clone https://github.com/thehenrymcintosh/seams.git
-cd seams
-npm link
+curl -fsSL https://raw.githubusercontent.com/thehenrymcintosh/seams/main/install.sh | sh
 ```
+
+This puts seams in `~/.seams`, adds a `seams` command to `~/.local/bin` and links the skill into
+`~/.claude/skills/seams`. It needs no root and touches nothing else.
+
+**Update** with `seams update`, or run the same line again.
 
 Check it worked:
 
 ```sh
-seams where      # prints the folder you cloned into
+seams where      # prints ~/.seams
 ```
-
-**2. Add the skill to your agent**
-
-```sh
-npx skills add thehenrymcintosh/seams --skill seams
-```
-
-Add `-g` to install it for every project instead of just the current one.
 
 <details>
-<summary>Or link it by hand (Claude Code)</summary>
+<summary>Install by hand instead</summary>
 
 ```sh
-mkdir -p ~/.claude/skills
-ln -s "$(seams where)/skills/seams" ~/.claude/skills/seams
+git clone https://github.com/thehenrymcintosh/seams.git
+cd seams
+npm link                                   # the seams command
+ln -s "$(pwd)/skills/seams" ~/.claude/skills/seams   # the skill (Claude Code)
 ```
+
+Or add just the skill with `npx skills add thehenrymcintosh/seams --skill seams` (`-g` for every project).
 
 </details>
 
-That's it. There's no build step and nothing else to install.
+<details>
+<summary>Change where it installs, or uninstall</summary>
+
+Set `SEAMS_HOME`, `SEAMS_BIN` or `SEAMS_SKILLS` before `sh` to pick other folders.
+
+To uninstall: `rm -rf ~/.seams ~/.local/bin/seams ~/.claude/skills/seams`
+
+</details>
+
+There's no build step and nothing else to install.
 
 ---
 
@@ -135,6 +141,7 @@ On top of that, each plan has **phases** (slices that ship on their own), **ques
 | `seams render <file>` | Write the `.plan.html` page. Refuses if the plan has errors (`--force` to render anyway) |
 | `seams read <file.html>` | Print the plan inside a page as JSON (`--outline` for the agent outline) |
 | `seams where` | Print where seams is installed |
+| `seams update` | Pull the latest version |
 
 `<file>` can be the `.plan.ts` source, a `.json` export, or a rendered `.html` page.
 
