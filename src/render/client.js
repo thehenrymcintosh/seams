@@ -470,6 +470,7 @@
         noteLine(m.note),
         srcLine(m.sources),
         reactsTo(m),
+        gapsLine(m),
         changeList(cs)),
       group("endpoints", "Endpoints", m.endpoints.length, endpointList(m, ctx)),
       group("contracts", "Contracts", m.contracts.length, m.contracts.map((c) => contractRow(m, c, ctx))),
@@ -510,6 +511,16 @@
     if (open) return h("div", { class: "nested" }, moduleCard(sub, ctx, () => toggle(sub.id)));
     return h("section", { class: cls("row", "sub", state.selected === sub.id && "selected", (!nodeInPhase(sub.id) || filteredOut(sub.id, ctx)) && "dim"), "data-node-id": sub.id },
       rowHead(sub.id, boxIcon(), sub.name, sub.depth === "stub" ? "not mapped" : terms(sub.purpose), ctx, "sub-purpose"));
+  }
+
+  // Where the code reaches another module outside the model. Kept visible on
+  // the card, since it is what the plan simplifies.
+  function gapsLine(m) {
+    if (!m.gaps.length) return null;
+    return h("div", { class: "gaps" }, m.gaps.map((g) => h("div", { class: "gap", title: g.note },
+      h("span", { class: "gap-label" }, "code also reaches"),
+      g.ref ? h("button", { class: "linklike quiet", onclick: (ev) => { ev.stopPropagation(); reveal(g.ref); } }, g.module) : g.module,
+      h("span", { class: "gap-note" }, g.note))));
   }
 
   // Events are the one relationship a wire can't label legibly, so the

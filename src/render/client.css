@@ -485,3 +485,10 @@ details.ctx.asks .count { color: var(--ask); border-color: var(--ask); }
   .controls, .search, .search input { width: 100%; }
   .tile { min-width: 0; flex: 1 1 88px; }
 }
+
+/* gaps: where the code differs from the model */
+.gaps { display: grid; gap: 3px; margin: 6px 0 0; }
+.gap { font-size: 11.5px; line-height: 1.4; padding: 4px 7px; border: 1px dashed var(--border-strong, var(--faint)); border-radius: 6px; color: var(--muted); }
+.gap-label { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); margin-right: 5px; }
+.gap .linklike { font-weight: 600; color: var(--text); }
+.gap-note { display: block; }

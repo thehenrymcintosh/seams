@@ -219,6 +219,13 @@ export function check(plan: Plan): Diagnostic[] {
       else if (faked && !fake) warn(at, `${n} fake it, but it has no test adapter yet`);
     }
 
+    for (const g of m.gaps ?? []) {
+      const at = `${m.name} / gap ${g.module}`;
+      const target = ix.moduleByName.get(g.module);
+      if (!target || target === m) err(at, `no other module named ${g.module}`);
+      else if (m.uses.some((u) => ix.contractOwner.get(u.contract) === target)) warn(at, `${g.module} is already a declared dependency; the gap is not needed`);
+    }
+
     // --- 5. observability: signals hang off something real, and leak nothing
     const emitters = new Set<string>([
       ...m.endpoints.map((e) => e.name),

@@ -207,6 +207,7 @@
       "ports": [],
       "signals": [],
       "tests": [],
+      "gaps": [],
       "modules": []
     },
     {
@@ -656,6 +657,7 @@
       "ports": [],
       "signals": [],
       "tests": [],
+      "gaps": [],
       "modules": []
     }
   ]

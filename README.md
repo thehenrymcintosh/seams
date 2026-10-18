@@ -140,6 +140,7 @@ On top of that, each plan has **phases** (slices that ship on their own), **ques
 | `seams check <file>` | Run the checker |
 | `seams render <file>` | Write the `.plan.html` page. Refuses if the plan has errors (`--force` to render anyway) |
 | `seams read <file.html>` | Print the plan inside a page as JSON (`--outline` for the agent outline) |
+| `seams verify <file>` | Check the plan against the code in this repo (`--tree proposed` after building, `--repo <dir>` for another folder) |
 | `seams where` | Print where seams is installed |
 | `seams update` | Pull the latest version |
 
@@ -175,6 +176,35 @@ error   Payments / OrderRepository
 error   Orders -> Payments -> Orders
         dependency cycle between modules
 ```
+
+---
+
+## Keeping plan and code in step
+
+The checker asks whether a plan makes sense. `seams verify` asks whether the code agrees with it:
+
+- every `src()` path exists and contains the symbol it names
+- code in one module's folders imports another module only through a declared dependency, or a
+  `gap()` the plan names on purpose ("calls triggerWebhook directly")
+- every table, column and index in a store is in `schema.prisma` (Prisma only for now)
+- every operation has code, and new operations and endpoints point at it with `src()`
+
+The skill runs it twice. **After mapping**, on the current tree, so you never review a map that
+doesn't match the code. **After building**, on the proposed tree, slice by slice; when the code has
+to differ, the agent updates the plan instead. Before the Documenso change is built, verify lists
+exactly what is left:
+
+```
+error   proposed: Api / endpoint recipient.delegateDocumentWithToken
+        is new in this change; give it a src() pointing at the route that serves it
+error   proposed: Envelopes / table Recipient
+        column delegatedFromId is not in model Recipient
+error   proposed: Envelopes / Signing.Delegate
+        is new in this change; give it a src() pointing at the code that implements it
+```
+
+It checks structure, not behaviour: it knows `Signing.Delegate` exists, not that it keeps the
+aggregate's rules. The planned tests cover that.
 
 ---
 
@@ -253,10 +283,9 @@ Node runs the `.ts` files directly, so the code avoids `enum`, `namespace` and p
 
 </details>
 
-## Known gaps
+## Known limits
 
-- Plans are written from reading the code. Nothing yet extracts facts (imports, call sites,
-  complexity) from the TypeScript compiler.
+- Verify reads imports with a pattern match, not the TypeScript compiler, and checks Prisma schemas only.
 - The review loop is copy and paste. A command that sends notes straight back to the agent is next.
 - Transactions, sync vs async calls and contract versions aren't modelled yet.
 - The checker doesn't know which tests the change needs; the skill asks for one per new command and invariant.

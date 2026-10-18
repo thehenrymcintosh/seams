@@ -458,6 +458,7 @@
         "ports": [],
         "signals": [],
         "tests": [],
+        "gaps": [],
         "modules": []
       },
       {
@@ -665,6 +666,7 @@
         "ports": [],
         "signals": [],
         "tests": [],
+        "gaps": [],
         "modules": []
       },
       {
@@ -1294,6 +1296,7 @@
             "fakes": []
           }
         ],
+        "gaps": [],
         "modules": []
       },
       {
@@ -1501,6 +1504,7 @@
         "ports": [],
         "signals": [],
         "tests": [],
+        "gaps": [],
         "modules": []
       },
       {
@@ -1816,6 +1820,7 @@
             "note": "Runs against DynamoDB Local."
           }
         ],
+        "gaps": [],
         "modules": [
           {
             "kind": "module",
@@ -1870,6 +1875,7 @@
             "ports": [],
             "signals": [],
             "tests": [],
+            "gaps": [],
             "modules": []
           }
         ]

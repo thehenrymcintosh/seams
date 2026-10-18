@@ -138,6 +138,9 @@ export function diff(before: Plan, after: Plan): Change[] {
       for (const x of ts.added) push(mod, "internal", `new ${x.level} test: ${x.name}`, undefined, ids.test(mod, x.name), `new ${x.level} test`);
       for (const x of ts.removed) push(mod, "internal", `${x.level} test removed: ${x.name}`);
 
+      for (const g of b.gaps ?? []) if (!(a.gaps ?? []).some((x) => x.module === g.module)) push(mod, "internal", `new gap: the code reaches ${g.module} outside the model`);
+      for (const g of a.gaps ?? []) if (!(b.gaps ?? []).some((x) => x.module === g.module)) push(mod, "internal", `closes the gap with ${g.module}`);
+
       // 2. module split
       const ua = new Set(a.uses.map((u) => u.contract)), ub = new Set(b.uses.map((u) => u.contract));
       for (const u of b.uses) {

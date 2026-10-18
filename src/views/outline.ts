@@ -36,6 +36,8 @@ export function outline(doc: PlanDocument): string {
   out.push("# - a store lists the physical tables a module owns; each `served by` is the key or index a lookup must use,");
   out.push("#   and `SCAN` marks a lookup with none");
   out.push("# - an endpoint only parses, authorises (`auth`) and calls the operations after `->`; no logic of its own");
+  out.push("# - a gap is a dependency the code has and the model leaves out; do not add new ones, and remove one when the code stops needing it");
+  out.push("# - after building, `seams verify <plan> --tree proposed` must pass; if the code had to differ, change the plan, not just the code");
   out.push("# - a port is an interface the module owns and receives as a dependency; never import its adapter directly");
   out.push("# - each signal is emitted where `on` says, with exactly the listed fields; no secrets, and metric labels stay low-cardinality");
   out.push("# - each test proves what `covers` names, replacing only what `fakes` names; tests marked (planned) are to be written");
@@ -80,6 +82,7 @@ function planLines(plan: Plan): string[] {
     if (m.note) out.push(`${p}note: ${m.note}`);
     const uses = m.uses.map((u) => u.contract + (u.subscribes.length ? ` (on ${u.subscribes.join(", ")})` : ""));
     out.push(`${p}uses: ${uses.length ? uses.join("; ") : "nothing"}`);
+    for (const g of m.gaps ?? []) out.push(`${p}gap: the code also reaches ${g.module} — ${g.note}`);
     for (const a of m.aggregates) {
       out.push(`${p}aggregate [${ids.aggregate(path, a.name)}] root ${a.root}${a.members.length ? ` + ${a.members.join(", ")}` : ""}`);
       for (const i of a.invariants) out.push(`${p}  invariant: ${i}`);

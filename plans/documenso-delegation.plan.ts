@@ -5,7 +5,7 @@ import type { Module } from "../src/ast.ts";
 import type { PlanDocument } from "../src/doc.ts";
 import {
   aggregate, audit, command, contract, entity, enumOf, event, findBy, get, http, idx, log, module, plan, port, query, record,
-  repo, rpc, save, src, store, stub, subscribe, t, table, test, uniqueIdx,
+  repo, rpc, save, src, store, stub, subscribe, t, table, test, uniqueIdx, gap,
 } from "../src/dsl.ts";
 
 const lib = "packages/lib/server-only";
@@ -19,7 +19,7 @@ const signingOrder = module("SigningOrder", {
     contract("SigningOrder", {
       operations: [
         query("IsRecipientTurn", { envelopeId: t.string, recipientId: t.int }, t.boolean),
-        query("NextPendingRecipients", { envelopeId: t.string }, t.list(t.int)),
+        query("NextPendingRecipients", { envelopeId: t.string }, t.list(t.int), [], { sources: [src(`${lib}/recipient/get-next-pending-recipient.ts`, "getNextPendingRecipient", 7)] }),
       ],
     }),
   ],
@@ -45,7 +45,7 @@ const auditTrail = module("AuditTrail", {
         record("AuditEntry", { type: t.ref("AuditType"), actorEmail: t.string, data: t.string }),
       ],
       operations: [
-        command("Append", { envelopeId: t.string, entry: t.ref("AuditEntry") }, null),
+        command("Append", { envelopeId: t.string, entry: t.ref("AuditEntry") }, null, [], { sources: [src("packages/lib/utils/document-audit-logs.ts", "createDocumentAuditLogData", 40)] }),
         query("List", { envelopeId: t.string }, t.list(t.ref("AuditEntry"))),
       ],
     }),
@@ -119,11 +119,11 @@ const envelopeContract = (o: { status: string[]; recipientView: Record<string, R
     ],
     operations: [
       query("GetEnvelope", { envelopeId: t.string }, t.ref("EnvelopeView"), ["NotFound"]),
-      command("SetRecipients", { envelopeId: t.string, recipients: t.list(t.ref("RecipientInput")) }, t.list(t.ref("RecipientView")), ["NotFound", "NotEditable"]),
-      command("UpdateSettings", { envelopeId: t.string, settings: t.ref("EnvelopeSettings") }, null, ["NotFound", "NotEditable"]),
+      command("SetRecipients", { envelopeId: t.string, recipients: t.list(t.ref("RecipientInput")) }, t.list(t.ref("RecipientView")), ["NotFound", "NotEditable"], { sources: [src(`${lib}/recipient/set-document-recipients.ts`, "setDocumentRecipients", 32)] }),
+      command("UpdateSettings", { envelopeId: t.string, settings: t.ref("EnvelopeSettings") }, null, ["NotFound", "NotEditable"], { sources: [src(`${lib}/envelope/update-envelope.ts`, "updateEnvelope", 44)] }),
       command("Send", { envelopeId: t.string }, t.ref("EnvelopeView"), ["NotFound", "AlreadySent", "MissingFields"]),
       command("Cancel", { envelopeId: t.string, reason: t.string }, null, ["NotFound", "NotPending"]),
-      query("ListAuditLog", { envelopeId: t.string }, t.list(t.ref("AuditTrail.AuditEntry")), ["NotFound"]),
+      query("ListAuditLog", { envelopeId: t.string }, t.list(t.ref("AuditTrail.AuditEntry")), ["NotFound"], { sources: [src(`${lib}/document/find-document-audit-logs.ts`, "findDocumentAuditLogs", 24)] }),
     ],
     events: o.events,
   });
@@ -145,8 +145,8 @@ const signingContract = (extra: { ops?: ReturnType<typeof command>[]; types?: Re
       ...(extra.types ?? []),
     ],
     operations: [
-      query("GetSession", { token: t.string }, t.ref("SigningSession"), ["NotFound", "Expired"]),
-      command("SignField", { token: t.string, fieldId: t.int, value: t.string }, null, ["NotFound", "Expired", "NotYourTurn", "AlreadyInserted"]),
+      query("GetSession", { token: t.string }, t.ref("SigningSession"), ["NotFound", "Expired"], { sources: [src(`${lib}/envelope/get-envelope-for-recipient-signing.ts`, "getEnvelopeForRecipientSigning", 160)] }),
+      command("SignField", { token: t.string, fieldId: t.int, value: t.string }, null, ["NotFound", "Expired", "NotYourTurn", "AlreadyInserted"], { sources: [src(`${lib}/field/sign-field-with-token.ts`, "signFieldWithToken", 53)] }),
       command("Complete", { token: t.string, nextSignerEmail: t.optional(t.string) }, null, ["NotFound", "Expired", "NotYourTurn", "MissingFields", "AlreadyActioned"]),
       command("Reject", { token: t.string, reason: t.string }, null, ["NotFound", "Expired", "NotPending", "AlreadyActioned"]),
       ...(extra.ops ?? []),
@@ -167,6 +167,11 @@ const rejectAudit = audit("recipient rejected", "Signing.Reject", ["envelopeId",
 const rejectE2e = test("no step is activated past a rejected recipient", "e2e", "Signing.Reject",
   { exists: true, sources: [src("packages/app-tests/e2e/recipient/rejected-recipient-advancement.spec.ts", undefined, 37)] });
 
+const envelopeGaps = [
+  gap("Webhooks", "Envelope and document functions import triggerWebhook and call it directly. The plan models those calls as events."),
+  gap("Emails", "resend-document.ts renders the invite template itself instead of going through the email jobs."),
+];
+
 const envelopesV1 = module("Envelopes", {
   purpose: "A document or template being prepared, sent and signed: its recipients, their fields and signatures, and the rules for who acts when.",
   sources: envelopesSources,
@@ -182,6 +187,7 @@ const envelopesV1 = module("Envelopes", {
   modules: [signingOrder, auditTrail, sealing],
   uses: ["SigningOrder", "AuditTrail", "Sealing", "Accounts"],
   ports: [jobsPort],
+  gaps: envelopeGaps,
   signals: [rejectAudit],
   tests: [rejectE2e],
   provides: [
@@ -202,6 +208,7 @@ const emailsV1 = module("Emails", {
   sources: [src("packages/lib/jobs/definitions/emails/"), src("packages/email/templates/")],
   note: "Each email is a background job whose handler reads the envelope through Prisma itself. Conceptually it reads through GetEnvelope.",
   uses: [subscribe("Envelopes", "SigningRequested", "RecipientCompleted", "RecipientRejected", "EnvelopeCompleted")],
+  gaps: [gap("Accounts", "Account emails (confirmation, password reset) live in the same job folder and call user functions directly.")],
   ports: [port("Mailer", "Sends one rendered email.", ["sendMail({ to, from, subject, html, text })"],
     { prod: ["SMTP", "Resend", "MailChannels"], local: "SMTP on 127.0.0.1:2500" },
     { injected: false, sources: [src("packages/email/mailer.ts", "mailer", 108)], note: "Chosen by NEXT_PRIVATE_SMTP_TRANSPORT and imported directly in 11 files." })],
@@ -232,7 +239,7 @@ const webhooks = (events: string[], on: string[]) => module("Webhooks", {
       ],
       operations: [
         command("CreateWebhook", { teamId: t.int, webhookUrl: t.string, eventTriggers: t.list(t.ref("WebhookEvent")) }, t.ref("WebhookView"), ["InvalidUrl"]),
-        query("ListForTeam", { teamId: t.int }, t.list(t.ref("WebhookView"))),
+        query("ListForTeam", { teamId: t.int }, t.list(t.ref("WebhookView")), [], { sources: [src(`${lib}/webhooks/get-webhooks-by-team-id.ts`, "getWebhooksByTeamId", 6)] }),
       ],
     }),
   ],
@@ -263,6 +270,7 @@ const apiModule = (endpoints = apiEndpoints) => module("Api", {
   sources: [src("packages/trpc/server/"), src("packages/api/v1/"), src("apps/remix/server/router.ts")],
   note: "Rate limits and CSRF are applied per prefix in apps/remix/server/router.ts. Only the endpoints near the change are listed.",
   uses: ["Envelopes", "Signing", "Webhooks", "Accounts"],
+  gaps: [gap("Templates", "The envelope router also serves template actions; Templates has no mapped contract yet.")],
   endpoints,
   signals: endpoints.filter((e) => e.path.startsWith("recipient.")).map((e) =>
     log(`${e.path} called`, e.name, ["requestId", "ipAddress", "userAgent", "documentId"],
@@ -298,6 +306,7 @@ const envelopesV2: Module = module("Envelopes", {
   modules: [signingOrder, auditTrail, sealing],
   uses: envelopesV1.uses.map((u) => u.contract),
   ports: [jobsPort],
+  gaps: envelopeGaps,
   signals: [rejectAudit, audit("recipient delegated", "Signing.Delegate", ["envelopeId", "fromRecipientId", "toRecipientId", "reason", "ipAddress", "userAgent"],
     { note: "A new DocumentAuditLog type, DOCUMENT_RECIPIENT_DELEGATED. The certificate should show who handed over to whom." })],
   tests: [

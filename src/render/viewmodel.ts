@@ -38,6 +38,7 @@ export type ModuleView = {
   ports: PortView[];
   signals: SignalView[];
   tests: TestView[];
+  gaps: { module: string; ref?: string; note: string }[];
   modules: ModuleView[];           // sub-modules, drawn inside this card
 };
 
@@ -193,6 +194,10 @@ function treeView(plan: Plan): TreeView {
         id: ids.test(path, tc.name), name: tc.name, level: tc.level, covers: tc.covers.map(link), fakes: tc.fakes.map(link),
         exists: !!tc.exists, note: tc.note, sources: sources(tc.sources),
       })),
+      gaps: (m.gaps ?? []).map((g) => {
+        const t = placed.find((p) => p.module.name === g.module);
+        return { module: g.module, ref: t ? ids.module(t.path) : undefined, note: g.note };
+      }),
       modules: m.modules.map((sub) => moduleView(sub, `${path}/${sub.name}`)),
     };
     // What a signal or test names: an operation or event, an endpoint, a port,

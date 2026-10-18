@@ -2,7 +2,7 @@
 // only fill in `kind` tags and defaults so a plan reads like a spec.
 
 import type {
-  Aggregate, Binding, Contract, Endpoint, Engine, Entity, EventDef, Field, Index, Module, Operation, PhysicalIndex, Plan,
+  Aggregate, Binding, Contract, Gap, Endpoint, Engine, Entity, EventDef, Field, Index, Module, Operation, PhysicalIndex, Plan,
   Port, Primitive, RepoMethod, Repository, Signal, SourceRef, Store, TestCase, TypeDef, TypeExpr, Use,
 } from "./ast.ts";
 
@@ -44,6 +44,7 @@ export const module = (
     ports?: Port[];
     signals?: Signal[];
     tests?: TestCase[];
+    gaps?: Gap[];
     sources?: SourceRef[];
     note?: string;
   },
@@ -64,6 +65,7 @@ export const module = (
   ports: m.ports ?? [],
   signals: m.signals ?? [],
   tests: m.tests ?? [],
+  gaps: m.gaps ?? [],
   modules: m.modules ?? [],
 });
 
@@ -122,7 +124,8 @@ const op = (mode: "command" | "query") =>
     input: Record<string, TypeExpr>,
     output: TypeExpr | null,
     errors: string[] = [],
-  ): Operation => ({ kind: "operation", name, mode, input: fields(input), output, errors });
+    o: { sources?: SourceRef[]; note?: string } = {},
+  ): Operation => ({ kind: "operation", name, mode, input: fields(input), output, errors, ...o });
 
 export const command = op("command");
 export const query = op("query");
@@ -217,3 +220,6 @@ export const test = (
   kind: "test", name, level, covers: typeof covers === "string" ? [covers] : covers,
   fakes: o.fakes ?? [], exists: o.exists, sources: o.sources, note: o.note,
 });
+
+// gap("Webhooks", "Envelope functions call triggerWebhook directly (9 files); the plan models it as events.")
+export const gap = (moduleName: string, note: string): Gap => ({ module: moduleName, note });

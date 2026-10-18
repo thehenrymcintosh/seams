@@ -51,6 +51,9 @@ export type Module = Located & {
   ports: Port[];
   signals: Signal[];
   tests: TestCase[];
+  // Where the code knowingly depends on another module outside the model:
+  // `seams verify` accepts those imports, and says when one is gone.
+  gaps?: Gap[];
   // Sub-modules sit inside this module's boundary. Their contracts are
   // visible to their siblings and to this module, but not to anything
   // outside it: from outside, only this module's own contracts count.
@@ -209,7 +212,7 @@ export type Contract = Located & {
   events: EventDef[];
 };
 
-export type Operation = {
+export type Operation = Located & {
   kind: "operation";
   name: string;
   mode: "command" | "query";
@@ -223,6 +226,10 @@ export type EventDef = { kind: "event"; name: string; payload: Field[] };
 export type TypeDef =
   | { kind: "record"; name: string; fields: Field[] }
   | { kind: "enum"; name: string; values: string[] };
+
+// A dependency the code has and the model leaves out on purpose, such as
+// calling another module's internals where the plan says "event".
+export type Gap = { module: string; note: string };
 
 // ---- 2. Module split: the only cross-module edge ------------------------------
 

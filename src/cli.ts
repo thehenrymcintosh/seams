@@ -6,6 +6,8 @@
 //   seams new    <slug> [--learn]                 start plans/<slug>.plan.ts from a template
 //   seams where                                  print the folder seams is installed in
 //   seams update                                 pull the latest version into that folder
+//   seams verify <doc> [--tree current|proposed] [--repo <dir>]
+//                                                hold one tree of the plan to the code in a repository
 //   node src/cli.ts render <doc.ts|doc.json|doc.html> [-o out.html] [--force]
 //   node src/cli.ts read   <doc.html> [--outline] print the embedded document as JSON, or as the agent outline
 //   node src/cli.ts check  <doc.json|doc.html>    run the checker on both trees
@@ -17,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { check, type Diagnostic } from "./check.ts";
 import type { PlanDocument } from "./doc.ts";
 import { readDocument, renderDocument } from "./render/render.ts";
+import { verify } from "./verify.ts";
 import { outline } from "./views/outline.ts";
 
 const [cmd, file, ...rest] = process.argv.slice(2);
@@ -108,6 +111,19 @@ switch (cmd) {
   case "read":
     console.log(rest.includes("--outline") ? outline(await load(file)) : JSON.stringify(await load(file), null, 2));
     break;
+  case "verify": {
+    if (!file) { console.error("usage: seams verify <plan> [--tree current|proposed] [--repo <dir>]"); process.exit(2); }
+    const doc = await load(file);
+    const flag = (name: string) => { const i = rest.indexOf(name); return i >= 0 ? rest[i + 1] : undefined; };
+    const which = flag("--tree") ?? "current";
+    const tree = which === "proposed" ? doc.proposed : doc.current;
+    if (!tree) { console.error(`this plan has no ${which} tree`); process.exit(2); }
+    const repo = flag("--repo") ?? process.cwd();
+    const fs = verify(tree, repo, which === "proposed" ? doc.current : undefined);
+    print(fs.map((f) => ({ ...f, at: `${which}: ${f.at}` })));
+    console.log(fs.length ? `${fs.length} finding(s) against ${resolve(repo)}` : `the ${which} tree matches ${resolve(repo)}`);
+    process.exit(fs.some((f) => f.level === "error") ? 1 : 0);
+  }
   case "check": {
     const ds = diagnostics(await load(file));
     print(ds);
@@ -115,6 +131,6 @@ switch (cmd) {
     process.exit(ds.some((d) => d.level === "error") ? 1 : 0);
   }
   default:
-    console.error("usage: seams new <slug> | seams render|check|read <file> | seams where | seams update");
+    console.error("usage: seams new <slug> | seams render|check|read <file> | seams verify <file> | seams where | seams update");
     process.exit(2);
 }

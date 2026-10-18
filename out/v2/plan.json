@@ -207,6 +207,7 @@
       "ports": [],
       "signals": [],
       "tests": [],
+      "gaps": [],
       "modules": []
     },
     {
@@ -767,6 +768,7 @@
           "fakes": []
         }
       ],
+      "gaps": [],
       "modules": []
     },
     {
@@ -1082,6 +1084,7 @@
           "note": "Runs against DynamoDB Local."
         }
       ],
+      "gaps": [],
       "modules": [
         {
           "kind": "module",
@@ -1136,6 +1139,7 @@
           "ports": [],
           "signals": [],
           "tests": [],
+          "gaps": [],
           "modules": []
         }
       ]

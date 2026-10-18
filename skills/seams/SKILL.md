@@ -74,6 +74,11 @@ model to match. Model the boundary as it should be read, and put what the code a
 `note` on the node, with a source. Prefer facts over adjectives: "Recipient rows are written from
 29 files in 10 folders (grep)", not "ownership is leaky".
 
+When the code depends on another module the model leaves out on purpose (a direct call where the
+plan says "event"), declare it on the module: `gaps: [gap("Webhooks", "calls triggerWebhook directly")]`.
+`seams verify` accepts those imports and nothing else, so every shortcut in the code is either a
+declared dependency or a named gap.
+
 Side effects that need no answer (emails, webhooks, audit) are events from the module that
 decides they happen, subscribed to by the module that performs them, even when the code calls
 them directly. Say so in a note.
@@ -126,12 +131,40 @@ seams render plans/<slug>.plan.ts          # writes plans/<slug>.plan.html
 seams read   plans/<slug>.plan.html --outline
 ```
 
+Then hold the map to the code, from the repository root:
+
+```sh
+seams verify plans/<slug>.plan.ts          # the current tree must match the code
+```
+
+It checks that every `src()` exists and names a real symbol, that imports between module folders
+go through a declared `uses` or a `gap()`, that tables, columns and indexes exist in
+`schema.prisma`, and that each operation has code. Do not show the user a plan whose current tree
+fails verify: fix the map, add the missing `src()`, or declare the gap.
+
 `render` refuses a plan with errors. Fix errors by changing the model, not by deleting the rule's
 subject: an error usually means a boundary is wrong (a cycle, a module reaching into another's
 table). Warnings are findings; keep the ones that describe the real code and mention them.
 
 Then read the outline back and check it against the intent: every part of the intent should land
 on a node, and every change in the change list should be one you meant.
+
+## Building the change
+
+The plan is the spec, and it must still be true when the change is done. Build one slice at a time.
+For each slice:
+
+1. Write the code.
+2. Point every new operation and endpoint at the code that implements it with `src()`. Verify
+   refuses a new one without it.
+3. Run `seams verify plans/<slug>.plan.ts --tree proposed`. Its errors are the slice's remaining
+   work: columns not yet in the schema, operations with no code, imports with no declared
+   dependency.
+4. If the code had to differ from the plan, change the plan to match and render again, so the page
+   always shows what was built. Tell the user what changed and why. Never leave the two apart.
+
+The change is done when `seams verify --tree proposed` passes and the planned tests exist (mark
+them `exists: true` with a `src()`).
 
 ## On the next round
 
